@@ -1,13 +1,15 @@
-use std::{
-    io::{self, BufRead},
-};
+use std::io::{self, BufRead};
 
 type FishCounts = Vec<usize>;
 
 fn parse_fishies(mut reader: impl BufRead) -> Vec<usize> {
     let mut counts_str = String::new();
     reader.read_to_string(&mut counts_str).unwrap();
-    counts_str.trim().split(",").map(|age_str| usize::from_str_radix(age_str.trim(), 10).unwrap()).collect()
+    counts_str
+        .trim()
+        .split(",")
+        .map(|age_str| usize::from_str_radix(age_str.trim(), 10).unwrap())
+        .collect()
 }
 
 fn main() {
@@ -16,7 +18,6 @@ fn main() {
         let stdin_lock = stdin.lock();
         parse_fishies(stdin_lock)
     };
-
 
     let mut fish_count_by_tts: [usize; 9] = [0; 9];
 
@@ -34,7 +35,7 @@ fn main() {
         new_fish_count_by_tts[8] = spawns;
 
         for i in 1..9 {
-            new_fish_count_by_tts[i-1] += fish_count_by_tts[i];
+            new_fish_count_by_tts[i - 1] += fish_count_by_tts[i];
         }
 
         fish_count_by_tts = new_fish_count_by_tts;
@@ -46,14 +47,11 @@ fn main() {
     println!("total fish: {}", total_fish);
 }
 
-
-
-
 #[cfg(test)]
 mod test {
     use std::io::Cursor;
 
-    use crate::{parse_fishies};
+    use crate::parse_fishies;
 
     fn get_test_input() -> Vec<usize> {
         let test_data_str = include_str!("../test_input.txt");
@@ -67,6 +65,6 @@ mod test {
     fn test_parse() {
         let fish = get_test_input();
 
-        assert_eq!(fish, vec![3,4,3,1,2]);
+        assert_eq!(fish, vec![3, 4, 3, 1, 2]);
     }
 }

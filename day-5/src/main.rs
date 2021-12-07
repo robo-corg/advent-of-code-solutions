@@ -1,7 +1,8 @@
 use std::{
+    collections::HashSet,
     convert::Infallible,
     io::{self, BufRead},
-    str::FromStr, collections::HashSet,
+    str::FromStr,
 };
 
 use nalgebra::DimMax;
@@ -29,7 +30,7 @@ impl Line {
     }
 
     fn horiz_or_vert(&self) -> bool {
-        let d= self.get_diff();
+        let d = self.get_diff();
 
         let x0 = d[0] == 0;
         let y0 = d[1] == 0;
@@ -38,12 +39,11 @@ impl Line {
     }
 
     fn diagional(&self) -> bool {
-        let d= self.get_diff().abs();
+        let d = self.get_diff().abs();
 
         d[0] == d[1]
     }
 }
-
 
 impl FromStr for Line {
     type Err = Infallible;
@@ -72,7 +72,10 @@ fn main() {
     //dbg!(&lines);
 
     //let valid_line: Vec<_> = lines.iter().filter(|l| l.horiz_or_vert()).collect();
-    let valid_line: Vec<_> = lines.iter().filter(|l| l.horiz_or_vert() || l.diagional()).collect();
+    let valid_line: Vec<_> = lines
+        .iter()
+        .filter(|l| l.horiz_or_vert() || l.diagional())
+        .collect();
 
     dbg!(&valid_line);
 
@@ -84,7 +87,7 @@ fn main() {
         let mut p = line.0;
         let diff = line.get_diff();
 
-        let d= diff.map(|e| i32::clamp(e, -1, 1));
+        let d = diff.map(|e| i32::clamp(e, -1, 1));
 
         dbg!(d);
 
@@ -104,7 +107,6 @@ fn main() {
             p += d;
         }
     }
-
 
     //dbg!(&map);
     println!("{:?}", &map);

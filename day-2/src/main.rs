@@ -1,6 +1,5 @@
+use anyhow::{anyhow, Error};
 use std::io::{self, BufRead};
-use anyhow::{Error, anyhow};
-
 
 #[derive(Debug)]
 enum Dir {
@@ -17,7 +16,7 @@ impl Dir {
             "backward" => Ok(Dir::Backward),
             "up" => Ok(Dir::Up),
             "down" => Ok(Dir::Down),
-            _ => Err(anyhow!("Invalid direction"))
+            _ => Err(anyhow!("Invalid direction")),
         }
     }
 }
@@ -29,12 +28,19 @@ fn main_old() -> Result<(), anyhow::Error> {
         stdin_lock.lines().collect::<Result<Vec<_>, _>>()?
     };
 
-    let commands: Vec<_> = lines.iter().map(|line| {
-        let (dir_s, amount_s) =  line.split_once(" ").ok_or(anyhow!("Invalid command (need dir and amount"))?;
+    let commands: Vec<_> = lines
+        .iter()
+        .map(|line| {
+            let (dir_s, amount_s) = line
+                .split_once(" ")
+                .ok_or(anyhow!("Invalid command (need dir and amount"))?;
 
-        Ok((Dir::from_str(dir_s)?, i64::from_str_radix(amount_s.trim(), 10)?))
-    }).collect::<Result<Vec<_>, Error>>()?;
-
+            Ok((
+                Dir::from_str(dir_s)?,
+                i64::from_str_radix(amount_s.trim(), 10)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
     dbg!(&commands);
 
@@ -46,7 +52,7 @@ fn main_old() -> Result<(), anyhow::Error> {
             Dir::Forward => horiz += amount,
             Dir::Backward => horiz -= amount,
             Dir::Down => depth += amount,
-            Dir::Up => depth -= amount
+            Dir::Up => depth -= amount,
         }
     }
 
@@ -57,7 +63,6 @@ fn main_old() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-
 fn main() -> Result<(), anyhow::Error> {
     let lines: Vec<String> = {
         let stdin = io::stdin();
@@ -65,12 +70,19 @@ fn main() -> Result<(), anyhow::Error> {
         stdin_lock.lines().collect::<Result<Vec<_>, _>>()?
     };
 
-    let commands: Vec<_> = lines.iter().map(|line| {
-        let (dir_s, amount_s) =  line.split_once(" ").ok_or(anyhow!("Invalid command (need dir and amount"))?;
+    let commands: Vec<_> = lines
+        .iter()
+        .map(|line| {
+            let (dir_s, amount_s) = line
+                .split_once(" ")
+                .ok_or(anyhow!("Invalid command (need dir and amount"))?;
 
-        Ok((Dir::from_str(dir_s)?, i64::from_str_radix(amount_s.trim(), 10)?))
-    }).collect::<Result<Vec<_>, Error>>()?;
-
+            Ok((
+                Dir::from_str(dir_s)?,
+                i64::from_str_radix(amount_s.trim(), 10)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
     dbg!(&commands);
 
@@ -83,13 +95,13 @@ fn main() -> Result<(), anyhow::Error> {
             Dir::Forward => {
                 horiz += amount;
                 depth += aim * amount;
-            },
+            }
             Dir::Backward => {
                 horiz -= amount;
                 depth -= aim * amount;
-            },
+            }
             Dir::Down => aim += amount,
-            Dir::Up => aim -= amount
+            Dir::Up => aim -= amount,
         }
     }
 

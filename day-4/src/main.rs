@@ -1,17 +1,21 @@
-use std::{io::{self, BufRead}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    io::{self, BufRead},
+};
 
-use ndarray::{Array2, Array1};
+use ndarray::{Array1, Array2};
 
 type Board = Array2<i32>;
 type BoardMarkings = Array2<i32>;
 
-
-
-fn parse_boards(mut reader: impl BufRead) -> (Vec<i32>, Vec<Board>){
+fn parse_boards(mut reader: impl BufRead) -> (Vec<i32>, Vec<Board>) {
     let mut drawings_line = String::new();
     reader.read_line(&mut drawings_line).unwrap();
 
-    let drawings: Vec<i32> = drawings_line.split(",").map(|num| i32::from_str_radix(num.trim(), 10).unwrap()).collect();
+    let drawings: Vec<i32> = drawings_line
+        .split(",")
+        .map(|num| i32::from_str_radix(num.trim(), 10).unwrap())
+        .collect();
 
     let mut boards = Vec::new();
 
@@ -19,7 +23,6 @@ fn parse_boards(mut reader: impl BufRead) -> (Vec<i32>, Vec<Board>){
         let mut buf = String::new();
         reader.read_line(&mut buf).unwrap();
     }
-
 
     'read_boards: loop {
         let mut row_buf = String::new();
@@ -35,17 +38,19 @@ fn parse_boards(mut reader: impl BufRead) -> (Vec<i32>, Vec<Board>){
 
                 dbg!(&row_buf);
 
-                let row_vec: Vec<i32> = row_buf.trim().split_whitespace().map(|num| i32::from_str_radix(num, 10).unwrap()).collect();
+                let row_vec: Vec<i32> = row_buf
+                    .trim()
+                    .split_whitespace()
+                    .map(|num| i32::from_str_radix(num, 10).unwrap())
+                    .collect();
 
                 board_rows.push(Array1::from_vec(row_vec));
 
                 row_buf.clear();
-            }
-            else {
+            } else {
                 if board_rows.is_empty() {
                     break 'read_boards;
-                }
-                else {
+                } else {
                     break;
                 }
             }
@@ -73,10 +78,7 @@ fn parse_boards(mut reader: impl BufRead) -> (Vec<i32>, Vec<Board>){
         }
     }
 
-    (
-        drawings,
-        boards
-    )
+    (drawings, boards)
 }
 
 fn main() {
@@ -86,10 +88,13 @@ fn main() {
         parse_boards(stdin_lock)
     };
 
-    let mut board_markings: Vec<BoardMarkings> = boards.iter().map(|board| {
-        let s = board.shape();
-        BoardMarkings::zeros((s[0], s[1]))
-    }).collect();
+    let mut board_markings: Vec<BoardMarkings> = boards
+        .iter()
+        .map(|board| {
+            let s = board.shape();
+            BoardMarkings::zeros((s[0], s[1]))
+        })
+        .collect();
 
     dbg!(&board_markings);
 
@@ -117,8 +122,14 @@ fn main() {
                 }
             }
 
-            let row_matches = markings.rows().into_iter().any(|row| row.iter().all(|cell| *cell > 0));
-            let col_matches = markings.columns().into_iter().any(|row| row.iter().all(|cell| *cell > 0));
+            let row_matches = markings
+                .rows()
+                .into_iter()
+                .any(|row| row.iter().all(|cell| *cell > 0));
+            let col_matches = markings
+                .columns()
+                .into_iter()
+                .any(|row| row.iter().all(|cell| *cell > 0));
 
             let bingo = row_matches || col_matches;
 
@@ -173,7 +184,13 @@ mod test {
     fn test_parse() {
         let (drawings, boards) = get_test_input();
 
-        assert_eq!(drawings, vec![7,4,9,5,11,17,23,2,0,14,21,24,10,16,13,6,15,25,12,22,18,20,8,19,3,26,1]);
+        assert_eq!(
+            drawings,
+            vec![
+                7, 4, 9, 5, 11, 17, 23, 2, 0, 14, 21, 24, 10, 16, 13, 6, 15, 25, 12, 22, 18, 20, 8,
+                19, 3, 26, 1
+            ]
+        );
 
         assert_eq!(boards.len(), 3);
 
