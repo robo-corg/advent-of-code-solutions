@@ -103,10 +103,6 @@ fn check_solution_open(decoding: &Vec<(&str, Vec<u8>)>) -> bool {
     decoding.iter().all(|entry| entry.1.len() >= 1)
 }
 
-// fn decode_scrambled_segments(full_segment_mappings: &[Option<SegmentIndex>; 7], s: &str) {
-
-// }
-
 fn decode_preamble(
     preamble: &Vec<String>,
     mut full_segment_mappings: [Option<SegmentIndex>; 7],
@@ -134,20 +130,13 @@ fn decode_preamble(
             } else if l == DIGIT_COUNTS[8] {
                 Some((s.as_str(), 8))
             }
-            // else if s == "cdfbe" {
-            //     Some((s.as_str(), 3))
-            // }
             else {
                 None
             }
         })
         .collect();
 
-    //dbg!(&known_outputs);
-
     for (s, decoded) in known_outputs.iter().copied() {
-        //dbg!("starting", s);
-
         let active_segments = DIGITS[decoded as usize];
 
         let letter_segments: Vec<u8> = s.chars().map(char_to_segment).collect();
@@ -155,21 +144,10 @@ fn decode_preamble(
 
         let decoded_segments_mask = encode_number(decoded);
 
-        //eprintln!("{:07b}", decoded_segments_mask);
-
-        //dbg!(letter_segments, letter_segments_mask);
 
         for bit in 0..7 {
             let active = (letter_segments_mask & (1 << bit)) != 0;
 
-            // If the segment was not used by the decoded number disable it as a candidate
-            // for the letter_segments
-            // if !active {
-            //     letter_segment_mapping[bit] &= !decoded_segments_mask;
-            // }
-            // else {
-            //     letter_segment_mapping[bit] &= decoded_segments_mask;
-            // }
 
             if !active {
                 letter_segment_mapping[bit] &= !decoded_segments_mask;
@@ -180,19 +158,6 @@ fn decode_preamble(
 
         loop {
             let mut solved_letter_mask = 0;
-            let mut solved_encoded_mask = 0;
-
-            //dbg!("letter mapping");
-
-            // for segment in letter_segment_mapping {
-            //     dbg!(segment.count_ones(), format!("{:07b}", segment));
-            // }
-
-            // dbg!("decoded mapping");
-
-            // for segment in decoded_segment_mapping {
-            //     dbg!(segment.count_ones());
-            // }
 
             for (segment_index, segment_mask) in letter_segment_mapping.iter().copied().enumerate()
             {
@@ -201,36 +166,8 @@ fn decode_preamble(
                     let mapped_segment = first_active_segment(segment_mask);
 
                     full_segment_mappings[segment_index] = Some(mapped_segment);
-
-                    //dbg!(segment_index, mapped_segment);
                 }
             }
-
-            // for bit in 0..7 {
-            //     let bit_count: u8 = letter_segment_mapping.iter().copied().map(|mask| (mask >> bit)  & 1).sum();
-
-            //     if bit_count == 1 {
-            //         let solution_index = letter_segment_mapping.iter().copied().position(|mask| ((mask >> bit)  & 1) != 0).unwrap();
-
-            //         dbg!(bit, solution_index, letter_segment_mapping);
-
-            //         let solution_mask = 1 << bit;
-
-            //         let mapped_segment = first_active_segment(solution_mask);
-            //         full_segment_mappings[solution_index as usize] = Some(mapped_segment);
-
-            //         solved_letter_mask |= solution_mask;
-            //     }
-            // }
-
-            // for (segment_index, segment_mask) in decoded_segment_mapping.iter().copied().enumerate() {
-            //     if segment_mask.count_ones() == 1 {
-            //         solved_encoded_mask |= segment_mask;
-            //         let mapped_segment = first_active_segment(segment_mask);
-            //     }
-            // }
-
-            //dbg!(solved_letter_mask);
 
             if solved_letter_mask != 0 {
                 // Remove solved segments from the mappings
@@ -249,26 +186,19 @@ fn decode_preamble(
                 let segment_count = u8::count_ones(encoded);
                 count_masks[segment_count as usize] |= (!encoded) & 0b1111111;
             }
-
-            // for n in 0..10 {
-            //     eprintln!("{}: {:07b}", n, count_masks[n]);
-            // }
         }
 
-        dbg!(full_segment_mappings);
+        //dbg!(full_segment_mappings);
     }
 
+    // Attempt to decode outputting possible candidates
     let decoded_outputs: Vec<(&str, Vec<u8>)> = preamble
         .iter()
         .map(|s| {
             let l = s.len();
-
-            //dbg!("checking", s);
-
             let mut candidates = Vec::new();
 
             let letter_segments: Vec<u8> = s.chars().map(char_to_segment).collect();
-            //dbg!(&letter_segments);
             let letter_segments_mask = encode_segments(&letter_segments);
 
             'find_digit: for n in 0u8..10 {
@@ -280,19 +210,15 @@ fn decode_preamble(
 
                 let encoded = encode_number(n);
 
-                //eprintln!("{:07b} {:07b}", letter_segments_mask, encoded);
-
                 for bit in 0..7 {
                     let letter_segment_expected_bit = (letter_segments_mask >> bit) & 1;
 
                     if let Some(encoded_bit) = full_segment_mappings[bit] {
                         let expected_encoded_bit = encoded >> encoded_bit & 1;
 
-                        //dbg!(n, bit, letter_segment_expected_bit, expected_encoded_bit);
 
                         // if bit does not match it can't be n
                         if letter_segment_expected_bit != expected_encoded_bit {
-                            //dbg!("bits do not match");
                             continue 'find_digit;
                         }
                     }
@@ -420,7 +346,7 @@ mod test {
     use std::io::Cursor;
 
     use crate::{
-        encode_number, first_active_segment, parse_input, test, Input, DIGITS, DIGIT_COUNTS,
+        encode_number, first_active_segment, parse_input, test, Input, DIGITS, DIGIT_COUNTS, encode_segments,
     };
 
     fn get_test_input() -> Input {
@@ -461,6 +387,8 @@ mod test {
 
         let encoded = encode_segments(&segments_vec);
 
-        //assert_eq!(segments_vec, )
+        dbg!(format!("{:b}", encoded));
+
+        assert_eq!(encoded, 0b1011111);
     }
 }
