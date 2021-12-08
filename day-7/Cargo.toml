@@ -7,3 +7,11 @@ edition = "2021"
 
 [dev-dependencies]
 proptest = "1.0.0"
+criterion = "0.3.5"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dependencies]
+rand = "0.8.4"
