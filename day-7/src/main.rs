@@ -22,11 +22,12 @@ fn fuel_cost(d: i32) -> i32 {
     d * (1 + d) / 2
 }
 
-
 fn crab_align_cost(crabs: &[i32], pos: i32) -> i32 {
     crabs.iter().map(|c| fuel_cost(i32::abs(c - pos))).sum()
 }
 
+/// TODO: Center of mass seems to be pretty accurate so we could probably do a binary to find
+/// a good starting partition and work from there
 fn find_nearest_crab(crabs: &[i32], pos: i32) -> (usize, usize) {
     assert!(crabs.len() > 0);
 
@@ -34,32 +35,45 @@ fn find_nearest_crab(crabs: &[i32], pos: i32) -> (usize, usize) {
         return (0, 1);
     }
 
-    if crabs[crabs.len()-1] <= pos {
-        return (crabs.len()-1, crabs.len());
+    if crabs[crabs.len() - 1] <= pos {
+        return (crabs.len() - 1, crabs.len());
     }
 
-    let half = crabs.len()/2;
+    let half = crabs.len() / 2;
 
     if crabs[half] < pos {
         let (s, e) = find_nearest_crab(&crabs[half..], pos);
-        return (s+half, e+half);
-    }
-    else {
+        return (s + half, e + half);
+    } else {
         return find_nearest_crab(&crabs[..half], pos);
     }
 }
 
 fn brute_force_find_best(crab_positions: &[i32]) -> Option<(i32, i32)> {
-    crab_positions.iter().copied().max().and_then(|search_space|
-        (0..search_space+1).map(|n|
-            (n, crab_align_cost(&crab_positions, n))
-        ).min_by_key(|x| x.1)
-    )
+    crab_positions
+        .iter()
+        .copied()
+        .max()
+        .and_then(|search_space| {
+            (0..search_space + 1)
+                .map(|n| (n, crab_align_cost(&crab_positions, n)))
+                .min_by_key(|x| x.1)
+        })
 }
 
 /// Given a sorted partitioned list of crabs find local minima of the cost function
 ///
-/// (x-x0)*(1+x-x0)
+/// Takes the basic arithmetic series sum that is our cost function with the abs() removed
+/// for x > x0 (left partition: (x-x0)*(1+x-x0)
+/// for x < x0 (right partition:(x-x0)*(1+x-x0)
+///
+/// Derivative of these is `x - x0 + 1/2` and `x - x0 + 1/2` respectively
+///
+/// The rate of change of our cost function is the rate of change of both of these summed over
+/// all the crabs: sum(x - left_crabs[i] + 1/2) + sum(x - right_crabs[i] + 1/2)
+///
+/// With this we can solve for x to find the local minima which may not be valid
+/// (though often times is super close) to the solution.
 fn cost_derivative_between(left_crabs: &[i32], right_crabs: &[i32]) -> f32 {
     let left_sum: i32 = left_crabs.iter().copied().map(|pos| pos).sum();
     let left_count = left_crabs.len() as f32;
@@ -67,9 +81,8 @@ fn cost_derivative_between(left_crabs: &[i32], right_crabs: &[i32]) -> f32 {
     let right_sum: i32 = right_crabs.iter().copied().map(|pos| pos).sum();
     let right_count = right_crabs.len() as f32;
 
-    let left_d = left_sum as f32 - (left_count as f32)/2.0;
-    let right_d = right_sum as f32 + (right_count as f32)/2.0;
-
+    let left_d = left_sum as f32 - (left_count as f32) / 2.0;
+    let right_d = right_sum as f32 + (right_count as f32) / 2.0;
 
     (left_d + right_d) / (left_count + right_count)
 }
@@ -78,40 +91,61 @@ fn best_position_between(left_crabs: &[i32], right_crabs: &[i32]) -> Option<i32>
     let maybe_left_pos = left_crabs.last().copied();
     let maybe_right_pos = right_crabs.first().copied();
 
-    let guess= cost_derivative_between(left_crabs, right_crabs);
+    // TODO: For partitions with a small range its probably faster to just brute force check every value?
+    let guess = cost_derivative_between(left_crabs, right_crabs);
 
+    // If the minima picked is outside the defined region simply return None (no solution)
+    // for this partitioning
     if let Some(left_pos) = maybe_left_pos {
-        if guess < (left_pos as f32) {
+        if guess < (left_pos as f32) - 0.5 {
             return None;
         }
     }
 
     if let Some(right_pos) = maybe_right_pos {
-        if guess > (right_pos as f32) {
+        if guess > (right_pos as f32) + 0.5 {
             return None;
         }
     }
 
-
+    // Most minima don't cleanly lie on integers so round to the nearest (best) alternative
     let guess_int = f32::round(guess) as i32;
-
-    dbg!(maybe_left_pos, guess, guess_int);
-
-    //dbg!(cost_derivative_between(left_crabs, right_crabs, 5));
 
     Some(guess_int)
 }
 
-fn find_with_local_minima(crab_positions: &[i32]) {
+/// Examine the region between crabs where cost function is differentiable
+///
+/// We can rewrite `abs(p1 - p0)` into either `p1 - p0` or `p0 - p1` if we
+/// know if p1 >= p0 or not. The set of positions where this does not change
+/// is differentiable (unlike abs(p1 - p0))
+///
+/// This is O(n*log(n)) vs O(x*n) where x is the max crab position
+fn find_with_local_minima(crab_positions: &[i32]) -> Option<(i32, i32)> {
+    if crab_positions.len() == 0 {
+        return None;
+    }
+
     let mut sorted_crab_positions = crab_positions.to_vec();
     sorted_crab_positions.sort();
 
-    let best_pivots: Vec<(usize, i32)> = (0..(sorted_crab_positions.len()+1)).filter_map(|i| {
-        let left_crabs = &sorted_crab_positions[..i];
-        let right_crabs = &sorted_crab_positions[i..];
+    // Examine every n+1 partitionings of the sorted crabs
+    let best_pivots: Vec<(usize, i32)> = (0..(sorted_crab_positions.len() + 1))
+        .filter_map(|i| {
+            let left_crabs = &sorted_crab_positions[..i];
+            let right_crabs = &sorted_crab_positions[i..];
 
-        best_position_between(left_crabs, right_crabs).map(|p| (i, p))
-    }).collect();
+            best_position_between(left_crabs, right_crabs).map(|p| (i, p))
+        })
+        .collect();
+
+    //dbg!(&best_pivots);
+
+    best_pivots
+        .into_iter()
+        .map(|(_, pos)| pos)
+        .min()
+        .map(|best_pos| (best_pos, crab_align_cost(&sorted_crab_positions, best_pos)))
 }
 
 fn main() {
@@ -121,55 +155,33 @@ fn main() {
         parse_input(stdin_lock)
     };
 
-    let mut crab_positions = input;
+    let crab_positions = input;
 
-    crab_positions.sort();
+    let maybe_brute_force_best = brute_force_find_best(&crab_positions);
 
-    //dbg!(&crab_positions);
+    if let Some(brute_foce_best) = maybe_brute_force_best {
+        println!(
+            "brute force best postion: {} cost: {}",
+            brute_foce_best.0, brute_foce_best.1
+        );
+    }
 
-    let crab_sum: i32 = crab_positions.iter().copied().sum();
-    let center_of_crab = crab_sum / (crab_positions.len() as i32);
+    let maybe_minima_best = find_with_local_minima(&crab_positions);
 
-    dbg!(center_of_crab);
-
-    let best_pos = Some(center_of_crab);
-
-    let best = brute_force_find_best(&crab_positions);
-
-
-    // let sum_part: i32 = crab_positions.iter().map(|p_0| 2*p_0 - 1).sum();
-    // dbg!(sum_part / (2*crab_positions.len() as i32));
-
-    // let costs: Vec<i32> = (0..search_space).map(|n|
-    //     crab_align_cost(&crab_positions, n)
-    // ).collect();
-
-    // for c in costs {
-    //     println!("{}", c);
-    // }
-
-    let best_pivots: Vec<(usize, i32)> = (0..(crab_positions.len()+1)).filter_map(|i| {
-        let left_crabs = &crab_positions[..i];
-        let right_crabs = &crab_positions[i..];
-
-        best_position_between(left_crabs, right_crabs).map(|p| (i, p))
-    }).collect();
-
-    dbg!(best_pivots);
-    dbg!(crab_align_cost(&crab_positions, 4));
-    dbg!(best);
-
-    // let nearest = find_nearest_crab(&crab_positions, 5);
-    // dbg!(nearest, crab_positions[nearest.0 as usize], crab_positions[nearest.1 as usize]);
+    if let Some(maybe_minima_best) = maybe_minima_best {
+        println!(
+            "minima best position: {} cost: {}",
+            maybe_minima_best.0, maybe_minima_best.1
+        );
+    }
 }
 
 #[cfg(test)]
 mod test {
     use proptest::prelude::*;
-    use std::iter::repeat;
     use std::io::Cursor;
 
-    use crate::{parse_input, Input, brute_force_find_best};
+    use crate::{brute_force_find_best, find_with_local_minima, parse_input, Input};
 
     fn get_test_input() -> Input {
         let test_data_str = include_str!("../test_input.txt");
@@ -182,7 +194,21 @@ mod test {
     #[test]
     fn test_parse() {
         let test_data = get_test_input();
-        assert_eq!(test_data, vec![16,1,2,0,4,2,7,1,2,14]);
+        assert_eq!(test_data, vec![16, 1, 2, 0, 4, 2, 7, 1, 2, 14]);
+    }
+
+    #[test]
+    fn test_brute_force_empty_crabs() {
+        let empty_crabs = Vec::new();
+        let actual = brute_force_find_best(&empty_crabs);
+        assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn test_local_minima_empty_crabs() {
+        let empty_crabs = Vec::new();
+        let actual = find_with_local_minima(&empty_crabs);
+        assert_eq!(actual, None);
     }
 
     prop_compose! {
@@ -209,11 +235,18 @@ mod test {
                 assert!(best.1 >= 0);
 
                 assert!(best.0 >= min_crab_pos);
-                //assert!(best.0 <= max_crab_pos);
             }
             else {
                 assert_eq!(maybe_best, None);
             }
+        }
+
+        #[test]
+        fn test_find_with_local_minima(crabs in crabs_strategy(1000)) {
+            let maybe_best = brute_force_find_best(&crabs);
+            let maybe_minima_best = find_with_local_minima(&crabs);
+
+            assert_eq!(maybe_minima_best.map(|b|b.1), maybe_best.map(|b|b.1));
         }
     }
 }
