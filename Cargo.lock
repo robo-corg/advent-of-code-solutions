@@ -221,6 +221,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "day-10"
+version = "0.1.0"
+
+[[package]]
 name = "day-2"
 version = "0.1.0"
 dependencies = [
@@ -265,6 +269,14 @@ dependencies = [
 [[package]]
 name = "day-8"
 version = "0.1.0"
+
+[[package]]
+name = "day-9"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "ndarray",
+]
 
 [[package]]
 name = "either"
