@@ -1,19 +1,19 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::BinaryHeap,
     io::{self, BufRead},
-    mem,
 };
 
-use nalgebra::DimMax;
-use ndarray::{s, Array1, Array2};
+use ndarray::{Array1, Array2};
+use rustc_hash::{FxHashMap, FxHashSet};
 
-type Point = nalgebra::Point2<i32>;
 type Vec2 = nalgebra::Vector2<i32>;
 type Map = Array2<i32>;
 
 type Input = Map;
 
-fn parse_input(mut reader: impl BufRead) -> Input {
+type Cost = i32;
+
+fn parse_input(reader: impl BufRead) -> Input {
     let map_vec: Vec<Array1<_>> = reader
         .lines()
         .map(|line| {
@@ -26,7 +26,7 @@ fn parse_input(mut reader: impl BufRead) -> Input {
         })
         .collect();
 
-    dbg!(&map_vec);
+    //dbg!(&map_vec);
 
     let width = map_vec[0].len();
 
@@ -53,7 +53,7 @@ fn get_neighbors(p: Vec2, world_size: Vec2) -> impl Iterator<Item = Vec2> {
     .filter(move |p| p[0] >= 0 && p[1] >= 0 && p[0] < world_size[0] && p[1] < world_size[1])
 }
 
-fn wrap_risk(unwrapped: i64) -> i64 {
+fn wrap_risk(unwrapped: Cost) -> Cost {
     if unwrapped > 9 {
         ((unwrapped - 1) % 9) + 1
     } else {
@@ -61,14 +61,14 @@ fn wrap_risk(unwrapped: i64) -> i64 {
     }
 }
 
-fn get_risk(map: &Map, pos: Vec2) -> i64 {
+fn get_risk(map: &Map, pos: Vec2) -> Cost {
     let shape = map.shape();
 
-    let size_x = shape[1] as i64;
-    let size_y = shape[0] as i64;
+    let size_x = shape[1] as Cost;
+    let size_y = shape[0] as Cost;
 
-    let world_x = pos[1] as i64;
-    let world_y = pos[0] as i64;
+    let world_x = pos[1] as Cost;
+    let world_y = pos[0] as Cost;
 
     let tile_x = world_x % size_x;
     let tile_y = world_y % size_y;
@@ -81,51 +81,68 @@ fn get_risk(map: &Map, pos: Vec2) -> i64 {
     //     ((extra_risk_pre_wrap - 1) % 9) + 1
     // } else {
     //     extra_risk_pre_wrap
-    // } as i64;
+    // } as Cost;
 
     //dbg!(world_x, world_y, tile_x, tile_y, extra_risk_pre_wrap);
 
-    wrap_risk(map[(tile_x as usize, tile_y as usize)] as i64 + extra_risk_pre_wrap)
+    wrap_risk(map[(tile_x as usize, tile_y as usize)] as Cost + extra_risk_pre_wrap)
 }
 
-fn dist(a: Vec2, b: Vec2) -> i64 {
+fn dist(a: Vec2, b: Vec2) -> Cost {
     let d = b - a;
 
-    i64::abs(d[0] as i64) + i64::abs(d[1] as i64)
+    Cost::abs(d[0] as Cost) + Cost::abs(d[1] as Cost)
 }
 
-fn h(a: Vec2, b: Vec2) -> i64 {
+fn h(a: Vec2, b: Vec2) -> Cost {
     dist(a, b)
 }
 
-fn find_path_cost(map: &Map, goal: Vec2, world_size: Vec2) -> i64 {
-    // let shape = map.shape();
+#[derive(Debug, Eq)]
+struct VisitItem {
+    estimated_cost: Cost,
+    pos: Vec2,
+}
 
-    // let row_count = shape[0];
-    // let col_count = shape[1];
+impl PartialEq for VisitItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.estimated_cost == other.estimated_cost
+    }
+}
 
-    dbg!(goal);
+impl PartialOrd for VisitItem {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for VisitItem {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.estimated_cost.cmp(&self.estimated_cost)
+    }
+}
+
+fn find_path_cost(map: &Map, goal: Vec2, world_size: Vec2) -> Cost {
     let start_pos = Vec2::new(0, 0);
-    let mut costs = HashMap::new();
-    let mut visit_queue = Vec::new();
 
-    let mut open_set = HashSet::new();
+    let mut costs = FxHashMap::default();
+    let mut visit_queue = BinaryHeap::new();
+    let mut open_set = FxHashSet::default();
+    let mut previous_links = FxHashMap::default();
 
-    let mut previous_links = HashMap::new();
-
-    visit_queue.push((get_risk(&map, start_pos) + h(start_pos, goal), start_pos));
+    visit_queue.push(VisitItem {
+        estimated_cost: get_risk(&map, start_pos) + h(start_pos, goal),
+        pos: start_pos,
+    });
     costs.insert(start_pos, get_risk(&map, start_pos));
-
-    //dbg!(&map);
 
     let mut maybe_last = None;
 
     loop {
-        visit_queue.sort_by_key(|item| item.0);
-        visit_queue.reverse();
-
-        let (current_estimated_cost, pos) =
-            visit_queue.pop().expect("Has next position to consider");
+        let VisitItem {
+            estimated_cost: current_estimated_cost,
+            pos,
+        } = visit_queue.pop().unwrap();
 
         let current_cost = costs.get(&pos).copied().unwrap();
 
@@ -142,51 +159,54 @@ fn find_path_cost(map: &Map, goal: Vec2, world_size: Vec2) -> i64 {
 
             let cur_best = costs.get(&neighbor).copied();
 
-            if cur_best.is_none() || neighbor_cost < cur_best.unwrap_or(i64::MAX) {
+            if cur_best.is_none() || neighbor_cost < cur_best.unwrap_or(Cost::MAX) {
                 costs.insert(neighbor, neighbor_cost);
                 previous_links.insert(neighbor, pos);
 
                 if !open_set.contains(&neighbor) {
                     let estimated_cost = neighbor_cost + h(neighbor, goal);
-                    visit_queue.push((estimated_cost, neighbor));
+                    visit_queue.push(VisitItem {
+                        estimated_cost,
+                        pos: neighbor,
+                    });
                     open_set.insert(neighbor);
                 }
             }
         }
     }
 
-    let (last_cost, last_pos) = maybe_last.unwrap();
+    let (last_cost, _last_pos) = maybe_last.unwrap();
 
-    let mut path = Vec::new();
-    let mut path_costs = Vec::new();
+    if false {
+        let mut path = Vec::new();
+        let mut path_costs = Vec::new();
 
-    let mut pos = last_pos;
+        let mut pos = _last_pos;
 
-    path.push(last_pos);
-    path_costs.push(get_risk(&map, last_pos));
+        path.push(_last_pos);
+        path_costs.push(get_risk(&map, _last_pos));
 
-    loop {
-        if pos == start_pos {
-            break;
+        loop {
+            if pos == start_pos {
+                break;
+            }
+
+            let prev_pos = previous_links.get(&pos).copied().unwrap();
+            path.push(prev_pos);
+            path_costs.push(get_risk(&map, prev_pos));
+            pos = prev_pos;
         }
 
-        let prev_pos = previous_links.get(&pos).copied().unwrap();
-        path.push(prev_pos);
-        path_costs.push(get_risk(&map, prev_pos));
-        pos = prev_pos;
+        path.reverse();
+        path_costs.reverse();
+
+        for p in path.iter() {
+            let risk = get_risk(&map, *p);
+            println!("{},{}: {}", p[0], p[1], risk);
+        }
     }
 
-    path.reverse();
-    path_costs.reverse();
-
-    //let mut tot = 0;
-
-    // for p in path.iter() {
-    //     let risk = get_risk(&map, *p);
-    //     println!("{},{}: {} {}", p[0], p[1], risk, tot);
-    //     tot += risk;
-    // }
-
+    // Risk for start doesn't count unless rerenter it
     last_cost - get_risk(&map, start_pos)
 }
 
