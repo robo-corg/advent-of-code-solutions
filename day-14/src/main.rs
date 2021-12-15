@@ -39,6 +39,7 @@ fn merge_counts(a: Option<&LetterCounts>, b: Option<&LetterCounts>) -> LetterCou
     merged_counts
 }
 
+/// Recursively counts expansions of rules, starting with a single pair from the polymer
 fn expand_and_count(rules: &Vec<Rule>, memo: &mut HashMap<(char, char, u8), LetterCounts>, a: char, b: char, depth: u8) {
     if memo.contains_key(&(a, b, depth))  {
         return;
