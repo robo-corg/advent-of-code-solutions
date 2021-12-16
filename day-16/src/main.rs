@@ -1,4 +1,3 @@
-use core::num;
 use std::{
     fmt,
     io::{self, BufRead},
@@ -21,7 +20,6 @@ impl fmt::Debug for BitSet {
         }
 
         Ok(())
-        //f.debug_struct("BitSet").field("offset", &self.offset).field("size", &self.size).field("data", &self.data).finish()
     }
 }
 
@@ -34,12 +32,12 @@ impl BitSet {
             .take(self.size)
     }
 
+    /// Push up to 8 bits to stream
     fn push_bits(&mut self, bits: u8, count: u8) {
         if count == 0 {
             return;
         }
 
-        //dbg!(&self.data, bits, count);
         let used_bits = (self.size % 8) as i32;
 
         let mask = 0xFF >> (8 - count);
@@ -50,6 +48,8 @@ impl BitSet {
             self.data.push(masked_value);
             self.size += count as usize;
         } else {
+            // if we have a partially filled byte grab the last one
+            // and append bits to it
             *self.data.last_mut().unwrap() |= masked_value << used_bits;
 
             let new_used_bits = i32::min(used_bits + count as i32, 8);
@@ -76,53 +76,33 @@ impl BitSet {
     pub fn get(&self, mut pos: usize, amount: u32) -> u32 {
         pos += self.offset as usize;
 
-
         let mut written: usize = 0;
         let mut output: u32 = 0;
-        // VVVTTTIL|LLLLLLLL|LLLLLLAA|AAAAAAAAABBBBBBBBBBBBBBBB
-        // 00111000|00000000|01101111|01000101001010010001001000000000
-
-        // 00000000001101111
-        // 1111011000000000
-
-        // 11110110000000000
-
         let mut shift = pos % 8;
 
         while written < amount as usize {
             let idx = pos / 8;
-
-
             let read = 8 - shift as usize;
-
-            //let mask = (1 << read) - 1;
-
             let fetched = (self.data[idx] >> shift) as u32;
 
             output |= fetched << written as u32;
             written += read;
 
-            //dbg!(idx, pos, format!("{:b}", self.data[idx]), shift, read, written, format!("{:b}", fetched));
-
             pos += written;
+            // After the read the rest will be aligned to the start
+            // of the byte being examined
             shift = 0;
         }
 
         let mask: u32 = (1 << amount) - 1;
 
-        //dbg!(mask.count_ones(), format!("{:b}", mask), format!("{:b}", output), format!("{:b}", output as u32 & mask));
-
+        // Packet decoded numbers have opposite bit order
         output = output.reverse_bits() >> (u32::BITS - amount);
-        //  111111111111111
-        // 1111011000000000
-        // 1111011000000000
-        // 00000000
-        // 000000000011011
-        //dbg!(output);
-
+        // We may have fetched extra bits so mask them off
         output as u32 & mask
     }
 
+    /// Split off a bitset that only extends to amount
     fn read_bitset(&mut self, amount: u32) -> BitSet {
         let ret = BitSet {
             offset: self.offset,
@@ -135,6 +115,7 @@ impl BitSet {
         ret
     }
 
+    /// Read amount bits as a number and advance offset by amount
     fn read(&mut self, amount: u32) -> u32 {
         let ret = self.get(0, amount);
         self.offset += amount as i64;
@@ -156,6 +137,8 @@ fn parse_str(s: &str) -> BitSet {
         .chars()
         .map(|ch| u8::from_str_radix(&ch.to_string(), 16).unwrap())
     {
+        // hex bit patterns order is opposite how they should be projected
+        // onto the bitstream so we have to reverse them
         bitset.push_bits(chunk.reverse_bits() >> 4, 4);
     }
 
@@ -195,7 +178,7 @@ impl Packet {
 
     fn eval(&self) -> u64 {
         match self {
-            Packet::Literal(v, nums) => {
+            Packet::Literal(_v, nums) => {
                 let mut output: u64 = 0;
 
                 dbg!(nums.len()*4);
@@ -311,10 +294,6 @@ fn main() {
 
     dbg!(&msg);
 
-    //let mut bits_iter = msg.iter();
-    let cur_bit = 0;
-
-
     let packet = parse_packet(&mut msg);
     dbg!(&packet);
 
@@ -420,7 +399,7 @@ mod test {
             Packet::Operator(Operator { packets, .. }) => {
                 assert_eq!(packets.len(), 2);
             },
-            other => {
+            _other => {
                 panic!("Expected operator packet");
             }
         }
@@ -435,7 +414,7 @@ mod test {
             Packet::Operator(Operator { packets, .. }) => {
                 assert_eq!(packets.len(), 3);
             },
-            other => {
+            _other => {
                 panic!("Expected operator packet");
             }
         }
