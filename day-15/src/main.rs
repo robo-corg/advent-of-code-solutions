@@ -40,9 +40,6 @@ fn parse_input(reader: impl BufRead) -> Input {
 }
 
 fn get_neighbors(p: Vec2, world_size: Vec2) -> impl Iterator<Item = Vec2> {
-    // let row_count = row_count as i32;
-    // let col_count = col_count as i32;
-
     vec![
         p + Vec2::new(-1, 0),
         p + Vec2::new(1, 0),
@@ -76,14 +73,6 @@ fn get_risk(map: &Map, pos: Vec2) -> Cost {
     let extra_risk_y = world_y / size_y;
 
     let extra_risk_pre_wrap = extra_risk_x + extra_risk_y;
-
-    // let extra_risk = if extra_risk_pre_wrap > 9 {
-    //     ((extra_risk_pre_wrap - 1) % 9) + 1
-    // } else {
-    //     extra_risk_pre_wrap
-    // } as Cost;
-
-    //dbg!(world_x, world_y, tile_x, tile_y, extra_risk_pre_wrap);
 
     wrap_risk(map[(tile_x as usize, tile_y as usize)] as Cost + extra_risk_pre_wrap)
 }

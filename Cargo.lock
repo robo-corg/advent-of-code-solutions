@@ -255,8 +255,10 @@ version = "0.1.0"
 name = "day-15"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "nalgebra",
  "ndarray",
+ "proptest",
  "rustc-hash",
 ]
 
