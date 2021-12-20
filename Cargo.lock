@@ -275,6 +275,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "day-18"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+]
+
+[[package]]
+name = "day-19"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "ndarray",
+ "petgraph",
+]
+
+[[package]]
 name = "day-2"
 version = "0.1.0"
 dependencies = [
