@@ -427,7 +427,9 @@ dependencies = [
 name = "day-21"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "itertools 0.10.3",
+ "rustc-hash",
 ]
 
 [[package]]
