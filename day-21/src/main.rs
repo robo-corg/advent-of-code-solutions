@@ -25,7 +25,7 @@ impl Game {
     }
 }
 
-fn play_part2(game: Game, possible_rolls: &Vec<i32>, memoize: &mut HashMap<Game, [usize; 3]>) -> [usize; 3] {
+fn play_part2(game: Game, possible_rolls: &Vec<i32>, memoize: &mut HashMap<Game, [usize; 2]>) -> [usize; 2] {
     assert!(game.player_score[0] < 21);
     assert!(game.player_score[1] < 21);
 
@@ -33,7 +33,7 @@ fn play_part2(game: Game, possible_rolls: &Vec<i32>, memoize: &mut HashMap<Game,
         return *cached;
     }
 
-    let mut player_wins = [0; 3];
+    let mut player_wins = [0; 2];
 
     let player_num = game.cur_player;
 
@@ -87,10 +87,10 @@ fn main() {
         'game: loop {
             for player_num in 0..2 {
                 let total: i32 = dice.by_ref().take(3).sum();
-                dbg!(total);
+                //dbg!(total);
                 player_pos[player_num] = (player_pos[player_num] + total) % 10;
                 player_score[player_num] += player_pos[player_num] + 1;
-                dbg!(player_score[player_num]);
+                //dbg!(player_score[player_num]);
 
                 if player_score[player_num] >= 1000 {
                     maybe_winning_player = Some(player_num);
