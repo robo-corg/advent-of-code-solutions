@@ -7,13 +7,19 @@ use itertools::iproduct;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Game {
+    /// 0 = player 1, 1 = player 2
     cur_player: u8,
     player_score: [u8; 2],
+    /// 0-based (0-9) instead of 1-10
     player_pos: [u8; 2],
 }
 
+// Probably not worth the perf since it only shaves off ~0.5ms.
 impl Hash for Game {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // The derive(Hash) likely does a state.write for each field but we most of these fields use
+        // fewer bits than that
+
         let hash: u32 = self.cur_player as u32      // cur_player is 1-bit
             | (self.player_pos[0] as u32) << 1      // position is 4-bit since it is mod 10
             | (self.player_pos[1] as u32) << 5      // position is 4-bit since it is mod 10
@@ -57,6 +63,8 @@ fn play_part2_inner(
         return *cached;
     }
 
+    // One player does not have any intrinsic advantage over the other beyond the state of Game.
+    // This means we can swap players and see if we have a memoized result then swap the result.
     if let Some(cached) = memoize.get(&game.flipped()) {
         return flip_arr(*cached);
     }
@@ -66,7 +74,6 @@ fn play_part2_inner(
     let player_num = game.cur_player as usize;
 
     for roll in possible_rolls.iter().copied() {
-        //dbg!(roll_player_1, roll_player_2);
         let mut game_fork = game.clone();
 
         game_fork.player_pos[player_num] = (game_fork.player_pos[player_num] + roll) % 10;
@@ -90,6 +97,8 @@ fn play_part2_inner(
 }
 
 pub fn play_part2(game: Game) -> [usize; 2] {
+    // It might speed things up to record the number of occurrences with each possible roll
+    // then multiply the wins by occurrences (though memoization already removes most of the gain)
     let possible_rolls_part2: Vec<u8> = iproduct!(1..4, 1..4, 1..4)
         .map(|(a, b, c)| a + b + c)
         .collect();
