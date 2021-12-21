@@ -54,4 +54,14 @@ fn main() {
 
 #[cfg(test)]
 mod test {
+    use day_21::{play_part2, Game};
+
+    #[test]
+    fn test_part2() {
+        let win_counts = play_part2(
+            Game::new([3, 7])
+        );
+
+        assert_eq!(win_counts, [444356092776315, 341960390180808]);
+    }
 }

@@ -14,6 +14,33 @@ pub struct Game {
     player_pos: [u8; 2],
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct GameKey {
+    player_score: [u8; 2],
+    /// 0-based (0-9) instead of 1-10
+    player_pos: [u8; 2],
+}
+
+#[derive(Default)]
+struct Memoizer {
+    table: HashMap<Game, [usize; 2]>
+}
+
+impl Memoizer {
+    fn get(&self, game: &Game) -> Option<[usize; 2]> {
+        // One player does not have any intrinsic advantage over the other beyond the state of Game.
+        // This means we can swap players and see if we have a memoized result then swap the result.
+        self.table
+            .get(game)
+            .copied()
+            .or_else(|| self.table.get(&game.flipped()).map(|scores| flip_arr(*scores)))
+    }
+
+    fn insert(&mut self, game: Game, player_wins: [usize; 2]) {
+        self.table.insert(game, player_wins);
+    }
+}
+
 // Probably not worth the perf since it only shaves off ~0.5ms.
 impl Hash for Game {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -24,7 +51,7 @@ impl Hash for Game {
             | (self.player_pos[0] as u32) << 1      // position is 4-bit since it is mod 10
             | (self.player_pos[1] as u32) << 5      // position is 4-bit since it is mod 10
             | (self.player_score[0] as u32) << 9    // score is 5-bit since it is < 21
-            | (self.player_score[1] as u32) << 14;  // score is 5-bit since it is < 21
+            | (self.player_score[1] as u32) << 14; // score is 5-bit since it is < 21
         state.write_u32(hash);
     }
 }
@@ -54,19 +81,13 @@ impl Game {
 fn play_part2_inner(
     game: Game,
     possible_rolls: &Vec<u8>,
-    memoize: &mut HashMap<Game, [usize; 2]>,
+    memoize: &mut Memoizer,
 ) -> [usize; 2] {
     assert!(game.player_score[0] < 21);
     assert!(game.player_score[1] < 21);
 
     if let Some(cached) = memoize.get(&game) {
-        return *cached;
-    }
-
-    // One player does not have any intrinsic advantage over the other beyond the state of Game.
-    // This means we can swap players and see if we have a memoized result then swap the result.
-    if let Some(cached) = memoize.get(&game.flipped()) {
-        return flip_arr(*cached);
+        return cached;
     }
 
     let mut player_wins = [0; 2];
@@ -102,6 +123,6 @@ pub fn play_part2(game: Game) -> [usize; 2] {
     let possible_rolls_part2: Vec<u8> = iproduct!(1..4, 1..4, 1..4)
         .map(|(a, b, c)| a + b + c)
         .collect();
-    let mut memoized = HashMap::default();
+    let mut memoized = Memoizer::default();
     play_part2_inner(game, &possible_rolls_part2, &mut memoized)
 }
