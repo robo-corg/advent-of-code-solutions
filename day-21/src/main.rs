@@ -10,22 +10,37 @@ fn parse_input(mut reader: impl BufRead) -> Input {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct Game {
-    cur_player: usize,
-    player_score: [i32; 2],
-    player_pos: [i32; 2]
+    cur_player: u8,
+    player_score: [u8; 2],
+    player_pos: [u8; 2]
+}
+
+fn flip_arr<T: Copy>(a: [T;2]) -> [T;2] {
+    [
+        a[1],
+        a[0]
+    ]
 }
 
 impl Game {
     fn new(player_pos: [i32; 2]) -> Self {
         Game {
             cur_player: 0,
-            player_pos,
+            player_pos: [player_pos[0] as u8, player_pos[1] as u8],
             player_score: [0, 0]
+        }
+    }
+
+    fn flipped(&self) -> Self {
+        Game {
+            cur_player: 1 - self.cur_player,
+            player_score: flip_arr(self.player_score),
+            player_pos: flip_arr(self.player_pos)
         }
     }
 }
 
-fn play_part2(game: Game, possible_rolls: &Vec<i32>, memoize: &mut HashMap<Game, [usize; 2]>) -> [usize; 2] {
+fn play_part2(game: Game, possible_rolls: &Vec<u8>, memoize: &mut HashMap<Game, [usize; 2]>) -> [usize; 2] {
     assert!(game.player_score[0] < 21);
     assert!(game.player_score[1] < 21);
 
@@ -33,9 +48,13 @@ fn play_part2(game: Game, possible_rolls: &Vec<i32>, memoize: &mut HashMap<Game,
         return *cached;
     }
 
+    if let Some(cached) = memoize.get(&game.flipped()) {
+        return flip_arr(*cached);
+    }
+
     let mut player_wins = [0; 2];
 
-    let player_num = game.cur_player;
+    let player_num = game.cur_player as usize;
 
     for roll in possible_rolls.iter().copied() {
         //dbg!(roll_player_1, roll_player_2);
@@ -70,8 +89,8 @@ fn main() {
         2
     ];
 
-    let mut player_score = [0; 2];
-    let mut player_pos = start_positions;
+    let mut player_score: [i32; 2] = [0; 2];
+    let mut player_pos: [i32; 2] = start_positions;
 
     let mut rolls = 0;
 
@@ -86,7 +105,7 @@ fn main() {
 
         'game: loop {
             for player_num in 0..2 {
-                let total: i32 = dice.by_ref().take(3).sum();
+                let total:i32  = dice.by_ref().take(3).sum();
                 //dbg!(total);
                 player_pos[player_num] = (player_pos[player_num] + total) % 10;
                 player_score[player_num] += player_pos[player_num] + 1;
@@ -104,7 +123,7 @@ fn main() {
 
     println!("{}", rolls*player_score[1-maybe_winning_player.unwrap()]);
 
-    let possible_rolls_part2: Vec<i32> = iproduct!(1..4, 1..4, 1..4).map(|(a, b, c)| { a + b + c}).collect();
+    let possible_rolls_part2: Vec<u8> = iproduct!(1..4, 1..4, 1..4).map(|(a, b, c)| { a + b + c}).collect();
 
     //let possible_rolls_part2: Vec<i32> = iproduct!(1..4).map(|a| { a }).collect();
 
