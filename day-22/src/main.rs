@@ -85,6 +85,25 @@ enum AAPlane {
     Z(i32)
 }
 
+impl AAPlane {
+    fn from_axis_num(axis: usize, val: i32) -> Self {
+        match axis {
+            0 => AAPlane::X(val),
+            1 => AAPlane::Y(val),
+            2 => AAPlane::Z(val),
+            other => panic!("Invalid axis: {}", other)
+        }
+    }
+
+    fn axis(&self) -> usize {
+        match self {
+            AAPlane::X(_) => 0,
+            AAPlane::Y(_) => 1,
+            AAPlane::Z(_) => 2,
+        }
+    }
+}
+
 /// Axis aligned plane with a facing direction
 #[derive(Debug)]
 struct HalfSpace(bool, AAPlane);
@@ -176,6 +195,19 @@ impl AAPlane {
             }
         }
     }
+
+    fn split_multiple(&self, cubes: impl Iterator<Item=Cuboid>) -> (Vec<Cuboid>, Vec<Cuboid>) {
+        let (left, right): (Vec<Option<Cuboid>>, Vec<Option<Cuboid>>) = cubes.map(|c| self.split(c)).unzip();
+
+        let output = (
+            left.into_iter().filter_map(|c| c).collect(),
+            right.into_iter().filter_map(|c| c).collect()
+        );
+
+
+
+        output
+    }
 }
 
 /// Iterator for all the half spaces representing the sides of the cube
@@ -236,7 +268,8 @@ fn split_cubes(splitter: Cuboid, target: Cuboid) -> (Vec<Cuboid>, Vec<Cuboid>) {
     (left, inside)
 }
 
-type Splits = [Option<i32>; 3];
+#[derive(Default)]
+struct Splits( [Option<i32>; 3]);
 
 enum KDTreeNode {
     Branch { split: AAPlane, left: Box<KDTreeNode>, right: Box<KDTreeNode> },
@@ -282,6 +315,55 @@ impl KDTreeNode {
         }
     }
 
+    fn balance(&mut self, parent_split_axis: Option<usize>) {
+        let mut replacement = None;
+
+        match self {
+            KDTreeNode::Leaf(nodes) if nodes.len() > 5 => {
+                let old_volume: usize = nodes.iter().map(Cuboid::get_volume).sum();
+
+                let split_axis = parent_split_axis.map(|a| (a + 1) % 3).unwrap_or(0);
+
+                let mut partition_candidates: Vec<i32> = nodes.iter().flat_map(|cube| [cube.min[split_axis], cube.max[split_axis]].into_iter()).collect();
+                partition_candidates.sort();
+
+                let median = partition_candidates[partition_candidates.len()/2];
+
+                let old_nodes = nodes.clone(); //mem::replace(nodes, Vec::new());
+
+                let split = AAPlane::from_axis_num(split_axis, median);
+                let (left, right) = split.split_multiple(old_nodes.into_iter());
+
+                if left.len() == 0 || right.len() == 0 {
+                    return;
+                }
+
+                let mut new_node = KDTreeNode::Branch {
+                    split,
+                    left: Box::new(KDTreeNode::Leaf(left)),
+                    right: Box::new(KDTreeNode::Leaf(right))
+                };
+
+                assert_eq!(new_node.get_volume(), old_volume);
+
+                new_node.balance(Some(split_axis));
+
+                assert_eq!(new_node.get_volume(), old_volume);
+
+                replacement = Some(new_node);
+            },
+            KDTreeNode::Branch { split, left, right } => {
+                left.balance(Some(split.axis()));
+                right.balance(Some(split.axis()));
+            }
+            _ => {}
+        }
+
+        if let Some(replacement) = replacement {
+            *self = replacement;
+        }
+    }
+
     fn get_volume(&self) -> usize {
         match self {
             KDTreeNode::Leaf(cubes) => {
@@ -308,6 +390,10 @@ impl KDTree {
 
     fn get_volume(&self) -> usize {
         self.0.get_volume()
+    }
+
+    pub fn balance(&mut self) {
+        self.0.balance(None);
     }
 }
 
@@ -361,10 +447,14 @@ fn main() {
 
     for cmd in input.iter() {
         kdtree.insert(cmd.clone());
+        kdtree.balance();
     }
 
     println!("on cubes (part2): {}", kdtree.get_volume());
 
+    // 1235164413198198
+    // 1110237838901716
+    // 226687381203442
 
     // let chunk_shape = Point3i::fill(16);
     // //let ambient_value = 0;
@@ -518,8 +608,8 @@ mod test {
         dbg!(&cube_a_outside);
         dbg!(&cube_a_inside);
 
-        let inside_vol: i32 = cube_a_inside.iter().map(|c| c.get_volume()).sum();
-        let outside_vol: i32 = cube_a_outside.iter().map(|c| c.get_volume()).sum();
+        let inside_vol: usize = cube_a_inside.iter().map(|c| c.get_volume()).sum();
+        let outside_vol: usize = cube_a_outside.iter().map(|c| c.get_volume()).sum();
 
         assert_eq!(inside_vol, 1);
         assert_eq!(outside_vol, 3*3*3-1);
