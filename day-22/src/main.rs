@@ -3,19 +3,20 @@ use std::mem;
 
 type Vec3 = nalgebra::Vector3<i32>;
 use building_blocks::core::prelude::*;
-use building_blocks::storage::{prelude::*, ChunkMap2x1, ChunkHashMap};
+use building_blocks::storage::{prelude::*, ChunkHashMap, ChunkMap2x1};
 type Input = Vec<Command>;
 
 fn parse_input(mut reader: impl BufRead) -> Input {
-    reader.lines().map(|line| {
-        Command::from_str(line.unwrap().as_str())
-    }).collect()
+    reader
+        .lines()
+        .map(|line| Command::from_str(line.unwrap().as_str()))
+        .collect()
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct Cuboid {
     min: Vec3,
-    max: Vec3
+    max: Vec3,
 }
 
 impl Cuboid {
@@ -36,7 +37,7 @@ impl Cuboid {
 
         Cuboid {
             min: Vec3::new(x_r.0, y_r.0, z_r.0),
-            max: Vec3::new(x_r.1+1, y_r.1+1, z_r.1+1)
+            max: Vec3::new(x_r.1 + 1, y_r.1 + 1, z_r.1 + 1),
         }
     }
 
@@ -50,11 +51,10 @@ impl Cuboid {
     }
 }
 
-
 #[derive(Clone, Debug)]
 struct Command {
     on: bool,
-    cuboid: Cuboid
+    cuboid: Cuboid,
 }
 
 impl Command {
@@ -62,12 +62,12 @@ impl Command {
         let (on_off_str, cuboid_str) = s.split_once(" ").unwrap();
 
         Command {
-            on:  match on_off_str {
+            on: match on_off_str {
                 "on" => true,
                 "off" => false,
-                other => panic!("Invalid command must start with on or off")
+                other => panic!("Invalid command must start with on or off"),
             },
-            cuboid: Cuboid::from_str(cuboid_str)
+            cuboid: Cuboid::from_str(cuboid_str),
         }
     }
 }
@@ -76,13 +76,12 @@ fn to_grid_point(v: Vec3) -> PointN<[i32; 3]> {
     PointN(v.data.0[0])
 }
 
-
 /// Undirected axis aligned plane
 #[derive(Debug)]
 enum AAPlane {
     X(i32),
     Y(i32),
-    Z(i32)
+    Z(i32),
 }
 
 impl AAPlane {
@@ -91,7 +90,7 @@ impl AAPlane {
             0 => AAPlane::X(val),
             1 => AAPlane::Y(val),
             2 => AAPlane::Z(val),
-            other => panic!("Invalid axis: {}", other)
+            other => panic!("Invalid axis: {}", other),
         }
     }
 
@@ -114,8 +113,7 @@ impl HalfSpace {
 
         if self.0 {
             (left, right)
-        }
-        else {
+        } else {
             (right, left)
         }
     }
@@ -129,21 +127,18 @@ impl AAPlane {
                     (
                         Some(Cuboid {
                             min: cube.min,
-                            max: Vec3::new(*x, cube.max[1], cube.max[2])
+                            max: Vec3::new(*x, cube.max[1], cube.max[2]),
                         }),
                         Some(Cuboid {
                             min: Vec3::new(*x, cube.min[1], cube.min[2]),
-                            max: cube.max
-                        })
+                            max: cube.max,
+                        }),
                     )
-                }
-                else if cube.max[0] < *x {
+                } else if cube.max[0] < *x {
                     (Some(cube), None)
-                }
-                else if cube.min[0] >= *x {
+                } else if cube.min[0] >= *x {
                     (None, Some(cube))
-                }
-                else {
+                } else {
                     panic!("Invalid x split: {:?} by {}", cube, x);
                 }
             }
@@ -152,21 +147,18 @@ impl AAPlane {
                     (
                         Some(Cuboid {
                             min: cube.min,
-                            max: Vec3::new(cube.max[0], *y, cube.max[2])
+                            max: Vec3::new(cube.max[0], *y, cube.max[2]),
                         }),
                         Some(Cuboid {
                             min: Vec3::new(cube.min[0], *y, cube.min[2]),
-                            max: cube.max
-                        })
+                            max: cube.max,
+                        }),
                     )
-                }
-                else if cube.max[1] < *y {
+                } else if cube.max[1] < *y {
                     (Some(cube), None)
-                }
-                else if cube.min[1] >= *y {
+                } else if cube.min[1] >= *y {
                     (None, Some(cube))
-                }
-                else {
+                } else {
                     panic!("Invalid y split: {:?} by {}", cube, y);
                 }
             }
@@ -175,60 +167,51 @@ impl AAPlane {
                     (
                         Some(Cuboid {
                             min: cube.min,
-                            max: Vec3::new(cube.max[0], cube.max[1], *z)
+                            max: Vec3::new(cube.max[0], cube.max[1], *z),
                         }),
                         Some(Cuboid {
                             min: Vec3::new(cube.min[0], cube.min[1], *z),
-                            max: cube.max
-                        })
+                            max: cube.max,
+                        }),
                     )
-                }
-                else if cube.max[2] < *z {
+                } else if cube.max[2] < *z {
                     (Some(cube), None)
-                }
-                else if cube.min[2] >= *z {
+                } else if cube.min[2] >= *z {
                     (None, Some(cube))
-                }
-                else {
+                } else {
                     panic!("Invalid z split: {:?} by {}", cube, z);
                 }
             }
         }
     }
 
-    fn split_multiple(&self, cubes: impl Iterator<Item=Cuboid>) -> (Vec<Cuboid>, Vec<Cuboid>) {
-        let (left, right): (Vec<Option<Cuboid>>, Vec<Option<Cuboid>>) = cubes.map(|c| self.split(c)).unzip();
+    fn split_multiple(&self, cubes: impl Iterator<Item = Cuboid>) -> (Vec<Cuboid>, Vec<Cuboid>) {
+        let (left, right): (Vec<Option<Cuboid>>, Vec<Option<Cuboid>>) =
+            cubes.map(|c| self.split(c)).unzip();
 
         let output = (
             left.into_iter().filter_map(|c| c).collect(),
-            right.into_iter().filter_map(|c| c).collect()
+            right.into_iter().filter_map(|c| c).collect(),
         );
-
-
 
         output
     }
 }
 
 /// Iterator for all the half spaces representing the sides of the cube
-fn cube_planes(cube: Cuboid) -> impl Iterator<Item=HalfSpace> {
+fn cube_planes(cube: Cuboid) -> impl Iterator<Item = HalfSpace> {
     (0..3).flat_map(move |dim| {
         (0..2).map(move |side| {
-            let v = if side == 0 {
-                cube.min
-            }
-            else {
-                cube.max
-            };
+            let v = if side == 0 { cube.min } else { cube.max };
 
             HalfSpace(
-                side==0,
+                side == 0,
                 match dim {
                     0 => AAPlane::X(v[dim]),
                     1 => AAPlane::Y(v[dim]),
                     2 => AAPlane::Z(v[dim]),
-                    other => panic!("Invalid dimension: {}", other)
-                }
+                    other => panic!("Invalid dimension: {}", other),
+                },
             )
         })
     })
@@ -259,7 +242,6 @@ fn split_cubes(splitter: Cuboid, target: Cuboid) -> (Vec<Cuboid>, Vec<Cuboid>) {
                     new_inside.push(inside);
                 }
             }
-
         }
 
         inside = new_inside;
@@ -269,47 +251,62 @@ fn split_cubes(splitter: Cuboid, target: Cuboid) -> (Vec<Cuboid>, Vec<Cuboid>) {
 }
 
 #[derive(Default)]
-struct Splits( [Option<i32>; 3]);
+struct Splits([Option<i32>; 3]);
 
 enum KDTreeNode {
-    Branch { split: AAPlane, left: Box<KDTreeNode>, right: Box<KDTreeNode> },
-    Leaf(Vec<Cuboid>)
+    Branch {
+        split: AAPlane,
+        left: Box<KDTreeNode>,
+        right: Box<KDTreeNode>,
+    },
+    Leaf(Vec<Cuboid>),
 }
 
 impl KDTreeNode {
     fn insert(&mut self, cmd: Command) {
         // TODO: Make this actually split nodes
         match self {
-            KDTreeNode::Leaf(cubes ) => {
+            KDTreeNode::Leaf(cubes) => {
                 if cmd.on {
                     let cubes_to_merge = mem::replace(cubes, Vec::new());
 
-                    *cubes = cubes_to_merge.into_iter().flat_map(|on_cuboid| {
-                        let (outside, _inside) = split_cubes(cmd.cuboid.clone(), on_cuboid);
-                        outside.into_iter()
-                    }).collect();
+                    *cubes = cubes_to_merge
+                        .into_iter()
+                        .flat_map(|on_cuboid| {
+                            let (outside, _inside) = split_cubes(cmd.cuboid.clone(), on_cuboid);
+                            outside.into_iter()
+                        })
+                        .collect();
 
                     cubes.push(cmd.cuboid);
-                }
-                else {
+                } else {
                     let cubes_to_split = mem::replace(cubes, Vec::new());
 
-                    *cubes = cubes_to_split.into_iter().flat_map(|on_cuboid| {
-                        let (outside, _inside) = split_cubes(cmd.cuboid.clone(), on_cuboid);
-                        outside.into_iter()
-                    }).collect();
+                    *cubes = cubes_to_split
+                        .into_iter()
+                        .flat_map(|on_cuboid| {
+                            let (outside, _inside) = split_cubes(cmd.cuboid.clone(), on_cuboid);
+                            outside.into_iter()
+                        })
+                        .collect();
                 }
-            },
-            KDTreeNode::Branch { split, left, right} => {
+            }
+            KDTreeNode::Branch { split, left, right } => {
                 let on = cmd.on;
                 let (maybe_split_left, maybe_split_right) = split.split(cmd.cuboid);
 
                 if let Some(split_left) = maybe_split_left {
-                    left.insert(Command { on, cuboid: split_left });
+                    left.insert(Command {
+                        on,
+                        cuboid: split_left,
+                    });
                 }
 
                 if let Some(split_right) = maybe_split_right {
-                    right.insert(Command { on, cuboid: split_right });
+                    right.insert(Command {
+                        on,
+                        cuboid: split_right,
+                    });
                 }
             }
         }
@@ -324,10 +321,13 @@ impl KDTreeNode {
 
                 let split_axis = parent_split_axis.map(|a| (a + 1) % 3).unwrap_or(0);
 
-                let mut partition_candidates: Vec<i32> = nodes.iter().flat_map(|cube| [cube.min[split_axis], cube.max[split_axis]].into_iter()).collect();
+                let mut partition_candidates: Vec<i32> = nodes
+                    .iter()
+                    .flat_map(|cube| [cube.min[split_axis], cube.max[split_axis]].into_iter())
+                    .collect();
                 partition_candidates.sort();
 
-                let median = partition_candidates[partition_candidates.len()/2];
+                let median = partition_candidates[partition_candidates.len() / 2];
 
                 let old_nodes = nodes.clone(); //mem::replace(nodes, Vec::new());
 
@@ -341,7 +341,7 @@ impl KDTreeNode {
                 let mut new_node = KDTreeNode::Branch {
                     split,
                     left: Box::new(KDTreeNode::Leaf(left)),
-                    right: Box::new(KDTreeNode::Leaf(right))
+                    right: Box::new(KDTreeNode::Leaf(right)),
                 };
 
                 assert_eq!(new_node.get_volume(), old_volume);
@@ -351,7 +351,7 @@ impl KDTreeNode {
                 assert_eq!(new_node.get_volume(), old_volume);
 
                 replacement = Some(new_node);
-            },
+            }
             KDTreeNode::Branch { split, left, right } => {
                 left.balance(Some(split.axis()));
                 right.balance(Some(split.axis()));
@@ -370,9 +370,7 @@ impl KDTreeNode {
                 let total: usize = cubes.iter().map(Cuboid::get_volume).sum();
                 total as usize
             }
-            KDTreeNode::Branch { left, right, .. } => {
-                left.get_volume() + right.get_volume()
-            }
+            KDTreeNode::Branch { left, right, .. } => left.get_volume() + right.get_volume(),
         }
     }
 }
@@ -415,19 +413,13 @@ fn main() {
 
         dbg!(&cmd_extent);
 
-        let val = if cmd.on {
-            1
-        }
-        else {
-            0
-        };
+        let val = if cmd.on { 1 } else { 0 };
 
         dbg!(val);
 
         //*map.get_mut(PointN([0, 0, 0])) = 1;
         map.fill_extent(&cmd_extent, val);
     }
-
 
     let mut lit_cells = 0;
 
@@ -440,8 +432,6 @@ fn main() {
     });
 
     println!("on cubes: {}", lit_cells);
-
-
 
     let mut kdtree = KDTree::new();
 
@@ -463,7 +453,6 @@ fn main() {
 
     // let mut lod0 = map.lod_view_mut(0);
 
-
     // for cmd in input.iter() {
     //     let cmd_extent = cmd.cuboid.to_extent();
 
@@ -481,7 +470,6 @@ fn main() {
     //     //*map.get_mut(PointN([0, 0, 0])) = 1;
     //     lod0.fill_extent(&cmd_extent, val);
     // }
-
 
     // let mut lit_cells = 0;
 
@@ -502,7 +490,9 @@ fn main() {
 mod test {
     use std::io::Cursor;
 
-    use crate::{parse_input, split_cubes, Input, Cuboid, Vec3, HalfSpace, AAPlane, KDTree, Command};
+    use crate::{
+        parse_input, split_cubes, AAPlane, Command, Cuboid, HalfSpace, Input, KDTree, Vec3,
+    };
 
     fn get_test_input() -> Input {
         let test_data_str = include_str!("../test_input.txt");
@@ -521,7 +511,7 @@ mod test {
     fn split_cube_with_halfspace() {
         let cube = Cuboid {
             min: Vec3::new(-5, -5, -5),
-            max: Vec3::new(5, 5, 5)
+            max: Vec3::new(5, 5, 5),
         };
 
         let halfspace = HalfSpace(true, AAPlane::X(0));
@@ -536,7 +526,7 @@ mod test {
     fn split_cube_with_halfspace_min() {
         let cube = Cuboid {
             min: Vec3::new(-5, -5, -5),
-            max: Vec3::new(5, 5, 5)
+            max: Vec3::new(5, 5, 5),
         };
 
         let halfspace = HalfSpace(true, AAPlane::X(-5));
@@ -551,7 +541,7 @@ mod test {
     fn split_cube_with_halfspace_max() {
         let cube = Cuboid {
             min: Vec3::new(-5, -5, -5),
-            max: Vec3::new(5, 5, 5)
+            max: Vec3::new(5, 5, 5),
         };
 
         let halfspace = HalfSpace(true, AAPlane::X(6));
@@ -566,12 +556,12 @@ mod test {
     fn test_split_cubes() {
         let cube_a = Cuboid {
             min: Vec3::new(-5, -5, -5),
-            max: Vec3::new(5, 5, 5)
+            max: Vec3::new(5, 5, 5),
         };
 
         let cube_b = Cuboid {
             min: Vec3::new(0, -5, -5),
-            max: Vec3::new(5, 5, 5)
+            max: Vec3::new(5, 5, 5),
         };
 
         let (cube_a_outside, cube_a_inside) = split_cubes(cube_b, cube_a);
@@ -585,22 +575,20 @@ mod test {
         assert_eq!(cube_a_outside[0].max[0], 0);
         assert_eq!(cube_a_inside[0].min[0], 0);
 
-        assert_eq!(cube_a_outside[0].get_volume(), 5*10*10);
-        assert_eq!(cube_a_inside[0].get_volume(), 5*10*10);
+        assert_eq!(cube_a_outside[0].get_volume(), 5 * 10 * 10);
+        assert_eq!(cube_a_inside[0].get_volume(), 5 * 10 * 10);
     }
-
-
 
     #[test]
     fn test_split_cubes_inside() {
         let cube_a = Cuboid {
             min: Vec3::new(0, 0, 0),
-            max: Vec3::new(3, 3, 3)
+            max: Vec3::new(3, 3, 3),
         };
 
         let cube_b = Cuboid {
             min: Vec3::new(1, 1, 1),
-            max: Vec3::new(2, 2, 2)
+            max: Vec3::new(2, 2, 2),
         };
 
         let (cube_a_outside, cube_a_inside) = split_cubes(cube_b, cube_a);
@@ -612,7 +600,7 @@ mod test {
         let outside_vol: usize = cube_a_outside.iter().map(|c| c.get_volume()).sum();
 
         assert_eq!(inside_vol, 1);
-        assert_eq!(outside_vol, 3*3*3-1);
+        assert_eq!(outside_vol, 3 * 3 * 3 - 1);
 
         //assert_eq!(cube_a_outside.len(), 1);
         assert_eq!(cube_a_inside.len(), 1);
@@ -626,7 +614,7 @@ mod test {
 
         kdtree.insert(cmd);
 
-        assert_eq!(kdtree.get_volume(), 3*3*3);
+        assert_eq!(kdtree.get_volume(), 3 * 3 * 3);
     }
 
     #[test]
