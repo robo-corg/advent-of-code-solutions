@@ -6,7 +6,7 @@ use building_blocks::core::prelude::*;
 use building_blocks::storage::{prelude::*, ChunkHashMap, ChunkMap2x1};
 type Input = Vec<Command>;
 
-fn parse_input(mut reader: impl BufRead) -> Input {
+fn parse_input(reader: impl BufRead) -> Input {
     reader
         .lines()
         .map(|line| Command::from_str(line.unwrap().as_str()))
@@ -65,7 +65,7 @@ impl Command {
             on: match on_off_str {
                 "on" => true,
                 "off" => false,
-                other => panic!("Invalid command must start with on or off"),
+                other => panic!("Invalid command `{}` must start with on or off", other),
             },
             cuboid: Cuboid::from_str(cuboid_str),
         }
@@ -78,28 +78,23 @@ fn to_grid_point(v: Vec3) -> PointN<[i32; 3]> {
 
 /// Undirected axis aligned plane
 #[derive(Debug)]
-enum AAPlane {
-    X(i32),
-    Y(i32),
-    Z(i32),
+struct AAPlane {
+    axis: u8,
+    split: i32
 }
 
 impl AAPlane {
     fn from_axis_num(axis: usize, val: i32) -> Self {
-        match axis {
-            0 => AAPlane::X(val),
-            1 => AAPlane::Y(val),
-            2 => AAPlane::Z(val),
-            other => panic!("Invalid axis: {}", other),
+        assert!(axis <= 2);
+
+        AAPlane {
+            axis: axis as u8,
+            split: val
         }
     }
 
     fn axis(&self) -> usize {
-        match self {
-            AAPlane::X(_) => 0,
-            AAPlane::Y(_) => 1,
-            AAPlane::Z(_) => 2,
-        }
+        self.axis as usize
     }
 }
 
@@ -121,67 +116,32 @@ impl HalfSpace {
 
 impl AAPlane {
     fn split(&self, cube: Cuboid) -> (Option<Cuboid>, Option<Cuboid>) {
-        match self {
-            AAPlane::X(x) => {
-                if cube.min[0] < *x && *x <= cube.max[0] {
-                    (
-                        Some(Cuboid {
-                            min: cube.min,
-                            max: Vec3::new(*x, cube.max[1], cube.max[2]),
-                        }),
-                        Some(Cuboid {
-                            min: Vec3::new(*x, cube.min[1], cube.min[2]),
-                            max: cube.max,
-                        }),
-                    )
-                } else if cube.max[0] < *x {
-                    (Some(cube), None)
-                } else if cube.min[0] >= *x {
-                    (None, Some(cube))
-                } else {
-                    panic!("Invalid x split: {:?} by {}", cube, x);
-                }
-            }
-            AAPlane::Y(y) => {
-                if cube.min[1] < *y && *y <= cube.max[1] {
-                    (
-                        Some(Cuboid {
-                            min: cube.min,
-                            max: Vec3::new(cube.max[0], *y, cube.max[2]),
-                        }),
-                        Some(Cuboid {
-                            min: Vec3::new(cube.min[0], *y, cube.min[2]),
-                            max: cube.max,
-                        }),
-                    )
-                } else if cube.max[1] < *y {
-                    (Some(cube), None)
-                } else if cube.min[1] >= *y {
-                    (None, Some(cube))
-                } else {
-                    panic!("Invalid y split: {:?} by {}", cube, y);
-                }
-            }
-            AAPlane::Z(z) => {
-                if cube.min[2] < *z && *z <= cube.max[2] {
-                    (
-                        Some(Cuboid {
-                            min: cube.min,
-                            max: Vec3::new(cube.max[0], cube.max[1], *z),
-                        }),
-                        Some(Cuboid {
-                            min: Vec3::new(cube.min[0], cube.min[1], *z),
-                            max: cube.max,
-                        }),
-                    )
-                } else if cube.max[2] < *z {
-                    (Some(cube), None)
-                } else if cube.min[2] >= *z {
-                    (None, Some(cube))
-                } else {
-                    panic!("Invalid z split: {:?} by {}", cube, z);
-                }
-            }
+        let axis = self.axis();
+
+        if cube.min[axis] < self.split && self.split <= cube.max[axis] {
+            let mut left_max = cube.max;
+            left_max[axis] = self.split;
+
+            let mut right_min = cube.min;
+            right_min[axis] = self.split;
+
+
+            (
+                Some(Cuboid {
+                    min: cube.min,
+                    max: left_max,
+                }),
+                Some(Cuboid {
+                    min: right_min,
+                    max: cube.max,
+                }),
+            )
+        } else if cube.max[axis] < self.split {
+            (Some(cube), None)
+        } else if cube.min[axis] >= self.split {
+            (None, Some(cube))
+        } else {
+            panic!("Invalid {}-axis split: {:?} by {}", axis, cube, self.split);
         }
     }
 
@@ -206,30 +166,21 @@ fn cube_planes(cube: Cuboid) -> impl Iterator<Item = HalfSpace> {
 
             HalfSpace(
                 side == 0,
-                match dim {
-                    0 => AAPlane::X(v[dim]),
-                    1 => AAPlane::Y(v[dim]),
-                    2 => AAPlane::Z(v[dim]),
-                    other => panic!("Invalid dimension: {}", other),
-                },
+                AAPlane::from_axis_num(dim, v[dim])
             )
         })
     })
 }
 
-///
 fn split_cubes(splitter: Cuboid, target: Cuboid) -> (Vec<Cuboid>, Vec<Cuboid>) {
     let mut left = Vec::new();
     let mut inside = vec![target];
 
     for half_space in cube_planes(splitter) {
-        //dbg!(&half_space);
         let mut new_inside = Vec::new();
 
         for cur_inside_cube in inside.iter() {
             let (maybe_outside, maybe_inside) = half_space.split(cur_inside_cube.clone());
-
-            //dbg!(&maybe_inside, &maybe_outside);
 
             if let Some(outside) = maybe_outside {
                 if outside.get_volume() > 0 {
@@ -441,49 +392,6 @@ fn main() {
     }
 
     println!("on cubes (part2): {}", kdtree.get_volume());
-
-    // 1235164413198198
-    // 1110237838901716
-    // 226687381203442
-
-    // let chunk_shape = Point3i::fill(16);
-    // //let ambient_value = 0;
-    // let builder = ChunkMapBuilder3x1::new(chunk_shape, 0);
-    // let mut map = builder.build_with_hash_map_storage();
-
-    // let mut lod0 = map.lod_view_mut(0);
-
-    // for cmd in input.iter() {
-    //     let cmd_extent = cmd.cuboid.to_extent();
-
-    //     dbg!(&cmd_extent);
-
-    //     let val = if cmd.on {
-    //         1
-    //     }
-    //     else {
-    //         0
-    //     };
-
-    //     dbg!(val);
-
-    //     //*map.get_mut(PointN([0, 0, 0])) = 1;
-    //     lod0.fill_extent(&cmd_extent, val);
-    // }
-
-    // let mut lit_cells = 0;
-
-    // //dbg!(map.extent());
-
-    // map.visit_occupied_chunks(0, &map.bounding_extent(0), |chunk| {
-    //     chunk.for_each(chunk.extent(), |_: Point3i, val| {
-    //         if val != 0 {
-    //             lit_cells += 1;
-    //         }
-    //     })
-    // });
-
-    // println!("on cubes: {}", lit_cells);
 }
 
 #[cfg(test)]
@@ -514,7 +422,7 @@ mod test {
             max: Vec3::new(5, 5, 5),
         };
 
-        let halfspace = HalfSpace(true, AAPlane::X(0));
+        let halfspace = HalfSpace(true, AAPlane::from_axis_num(0, 0));
 
         let (maybe_a, maybe_b) = halfspace.split(cube);
 
@@ -529,7 +437,7 @@ mod test {
             max: Vec3::new(5, 5, 5),
         };
 
-        let halfspace = HalfSpace(true, AAPlane::X(-5));
+        let halfspace = HalfSpace(true, AAPlane::from_axis_num(0, -5));
 
         let (maybe_a, maybe_b) = halfspace.split(cube);
 
@@ -544,7 +452,7 @@ mod test {
             max: Vec3::new(5, 5, 5),
         };
 
-        let halfspace = HalfSpace(true, AAPlane::X(6));
+        let halfspace = HalfSpace(true, AAPlane::from_axis_num(0, 6));
 
         let (maybe_a, maybe_b) = halfspace.split(cube);
 
