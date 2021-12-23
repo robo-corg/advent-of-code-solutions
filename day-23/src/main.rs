@@ -19,6 +19,7 @@ const HALLWAY_LENGTH: i32 = 11;
 const ROOM_X_POSITIONS: [i32; 4] = [3, 5, 7, 9];
 
 const ROOM_Y: i32 = 2;
+const ROOM_SIZE: i32 = 4;
 
 const NEIGHBORS_DIRS: [Vec2; 4] = [
     Vec2::new(0, -1),
@@ -41,7 +42,7 @@ fn load_map() -> Map {
     }
 
     for room_x in ROOM_X_POSITIONS {
-        for room_y in ROOM_Y..ROOM_Y + 2 {
+        for room_y in ROOM_Y..ROOM_Y + ROOM_SIZE {
             *map.get_mut(PointN([room_x, room_y])) = 2;
         }
     }
@@ -53,7 +54,7 @@ fn room_positions() -> impl Iterator<Item = Vec2> {
     ROOM_X_POSITIONS
         .iter()
         .copied()
-        .flat_map(|x| (ROOM_Y..ROOM_Y + 2).map(move |y| Vec2::new(x, y)))
+        .flat_map(|x| (ROOM_Y..ROOM_Y + ROOM_SIZE).map(move |y| Vec2::new(x, y)))
 }
 
 fn spawn_amphipods(types: &[AmphipodType]) -> Vec<Amphipod> {
@@ -299,7 +300,7 @@ impl Amphipod {
                         continue;
                     }
 
-                    for room_y in ROOM_Y..ROOM_Y + 2 {
+                    for room_y in ROOM_Y..ROOM_Y + ROOM_SIZE {
                         let room_pos = Vec2::new(room_x, room_y);
 
                         if self.pos != room_pos && occupied_locations.contains(&room_pos) {
@@ -350,59 +351,6 @@ fn check_goal(goal: &[Amphipod], state: &[Amphipod]) -> bool {
     state.iter().all(|pod| pod.state == State::Done)
 }
 
-// fn find_lowest_energy_plan(map: &Map, goal: &Vec<Amphipod>, pods: Vec<Amphipod>) -> Option<(i32, Vec<Amphipod>)> {
-//     let start_pos = Vec2::new(0, 0);
-
-//     let mut open: Vec<(i32, Vec<Amphipod>)> = Vec::new();
-//     let mut visited: HashSet<(i32, Vec<Amphipod>)>  = HashSet::default();
-
-//     let mut goal_configs = Vec::new();
-
-//     let mut costs: HashMap<Vec<Amphipod>, i32> = HashMap::new();
-
-//     costs.insert(pods.clone(), 0);
-//     let start_cost_and_state = (0, pods);
-//     open.push(start_cost_and_state.clone());
-
-//     //visited.insert(start_cost_and_state);
-
-//     while let Some((cur_cost, cur_state)) = open.pop() {
-//         if check_goal(goal, &cur_state) {
-//             goal_configs.push((cur_cost, cur_state));
-//             continue;
-//         }
-
-//         for (cur_pod_id, pod) in cur_state.iter().enumerate() {
-//             for move_pos in pod.next_legal_moves(map) {
-//                 let mut new_pods_state = cur_state.clone();
-
-//                 new_pods_state[cur_pod_id].pos = move_pos;
-
-//                 if new_pods_state[cur_pod_id].in_hallway(map) {
-//                     for (hallway_pod_id, hallway_update_pod) in new_pods_state.iter_mut().enumerate() {
-//                         if hallway_pod_id == cur_pod_id {
-//                             continue;
-//                         }
-
-//                         hallway_update_pod.update_hall_state(map);
-//                     }
-//                 }
-
-//                 //let next_cost_and_state = ;
-
-//                 let new_cost = cur_cost + pod.move_cost();
-
-//                 if new_cost < costs.get(&new_pods_state).copied().unwrap_or(i32::MAX) {
-//                     open.push((new_cost, new_pods_state.clone()));
-//                     costs.insert(new_pods_state, new_cost);
-//                 }
-//             }
-//         }
-//     }
-
-//     goal_configs.into_iter().min_by_key(|(cost, state)| *cost)
-// }
-
 fn determine_available_rooms(goal: &Vec<Amphipod>, pods: &Vec<Amphipod>) -> Vec<bool> {
     let pod_ty_by_pos: HashMap<Vec2, AmphipodType> =
         pods.iter().map(|pod| (pod.pos, pod.ty)).collect();
@@ -413,7 +361,7 @@ fn determine_available_rooms(goal: &Vec<Amphipod>, pods: &Vec<Amphipod>) -> Vec<
         .iter()
         .copied()
         .map(|room_x| {
-            (ROOM_Y..ROOM_Y + 2).all(|room_y| {
+            (ROOM_Y..ROOM_Y + ROOM_SIZE).all(|room_y| {
                 let pos = Vec2::new(room_x, room_y);
 
                 if let Some(occupied_type) = pod_ty_by_pos.get(&pos) {
@@ -470,8 +418,6 @@ fn find_lowest_energy_plan(
     goal: &Vec<Amphipod>,
     pods: Vec<Amphipod>,
 ) -> (i32, Vec<Amphipod>) {
-    let start_pos = Vec2::new(0, 0);
-
     let goal_rooms_iter = goal.iter().map(|pod| (pod.ty, pod.pos[0]));
 
     let mut goal_rooms = HashMap::new();
@@ -511,7 +457,7 @@ fn find_lowest_energy_plan(
                 visit_queue.len()
             );
 
-            println!("{}", DisplayMap(map, &cur_state));
+            //println!("{}", DisplayMap(map, &cur_state));
         }
 
         let cur_cost = costs[&cur_state];
@@ -597,23 +543,61 @@ fn main() {
     //     AmphipodType::Amber,
     // ]);
 
+    // #############
+    // #...........#
+    // ###D#A#C#C###
+    //   #D#A#B#B#
+    //   #########
+
+
+    // let pods = spawn_amphipods(&[
+    //     AmphipodType::Desert,
+    //     AmphipodType::Desert,
+    //     AmphipodType::Amber,
+    //     AmphipodType::Amber,
+    //     AmphipodType::Copper,
+    //     AmphipodType::Bronze,
+    //     AmphipodType::Copper,
+    //     AmphipodType::Bronze,
+    // ]);
+
+    // #############
+    // #...........#
+    // ###D#A#C#C###
+    //   #D#C#B#A#
+    //   #D#B#A#C#
+    //   #D#A#B#B#
+    //   #########
+
+
     let pods = spawn_amphipods(&[
         AmphipodType::Desert,
         AmphipodType::Desert,
-        AmphipodType::Amber,
+        AmphipodType::Desert,
+        AmphipodType::Desert,
+
         AmphipodType::Amber,
         AmphipodType::Copper,
         AmphipodType::Bronze,
+        AmphipodType::Amber,
+
+        AmphipodType::Copper,
+        AmphipodType::Bronze,
+        AmphipodType::Amber,
+        AmphipodType::Bronze,
+
+        AmphipodType::Copper,
+        AmphipodType::Amber,
         AmphipodType::Copper,
         AmphipodType::Bronze,
     ]);
+
 
 
     println!("{}", DisplayMap(&map, &pods));
 
     let mut goal_ty: Vec<AmphipodType> = pods.iter().map(|p| p.ty).collect();
     goal_ty.sort();
-    dbg!(&goal_ty);
     let mut goal = spawn_amphipods(&goal_ty);
 
     for pod in goal.iter_mut() {
@@ -624,29 +608,13 @@ fn main() {
 
     let maybe_best_plan = find_lowest_energy_plan(&map, &goal, pods);
 
-    dbg!(&maybe_best_plan);
+    let (best_plan_cost, best_plan) = maybe_best_plan;
 
-    let best_plan = maybe_best_plan;
+    //println!("{}", DisplayMap(&map, &best_plan));
 
-    println!("{}", DisplayMap(&map, &best_plan.1));
+    println!("cost: {}", best_plan_cost);
 }
 
 #[cfg(test)]
 mod test {
-    use std::io::Cursor;
-
-    use crate::{parse_input, Input};
-
-    fn get_test_input() -> Input {
-        let test_data_str = include_str!("../test_input.txt");
-
-        let test_data_reader = Cursor::new(test_data_str.to_owned());
-
-        parse_input(test_data_reader)
-    }
-
-    #[test]
-    fn test_parse() {
-        let test_data = get_test_input();
-    }
 }
