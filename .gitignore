@@ -2,3 +2,9 @@
 /*/*/target
 /target
 */*/input.txt
+perf.data
+perf.data.old
+output.txt
+expected.txt
+actual.txt
+flamegraph.svg
