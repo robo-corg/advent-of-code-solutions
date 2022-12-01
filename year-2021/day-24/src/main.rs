@@ -693,29 +693,31 @@ fn rust_program(mut input: impl Iterator<Item = i64>) -> i64 {
     z
 }
 
+const x_add: [i64; 14] = [12, 12, 13, 12, -3, 10, 14, -16, 12, -8, -12, -7, -6, -11];
+
+const add_y: [i64; 14] = [7, 8, 2, 11, 6, 12, 14, 13, 15, 10, 6, 10, 8, 5];
+
+const div_z: [i64; 14] = [
+    1,
+    1,
+    1,
+    1,
+    26,
+    1,
+    1,
+    26,
+    1,
+    26,
+    26,
+    26,
+    26,
+    26,
+];
+
+
 fn rust_program_condensed(inputs_arr: &[i64]) -> i64 {
     let mut z = 0;
 
-    let x_add = [12, 12, 13, 12, -3, 10, 14, -16, 12, -8, -12, -7, -6, -11];
-
-    let add_y = [7, 8, 2, 11, 6, 12, 14, 13, 15, 10, 6, 10, 8, 5];
-
-    let div_z = [
-        1,
-        1,
-        1,
-        1,
-        26,
-        1,
-        1,
-        26,
-        1,
-        26,
-        26,
-        26,
-        26,
-        26,
-    ];
 
     for (n, w) in inputs_arr.iter().copied().enumerate()
     {
@@ -737,10 +739,61 @@ fn rust_program_condensed(inputs_arr: &[i64]) -> i64 {
             z *= 26;
             z += w + add_y[n];
         }
+
+        z %= 26i64.pow(7);
     }
 
     z
 }
+
+fn rust_program_condensed_mod26(inputs_arr: &[i64]) -> i64 {
+    let mut z = 0;
+
+
+    for (n, w) in inputs_arr.iter().copied().enumerate()
+    {
+        let mut x = z;
+
+        //dbg!(z);
+
+        mod_!(x, 26);
+
+
+        // most passes
+        div!(z, div_z[n]);
+
+        add!(x, x_add[n]);
+
+        //dbg!(x);
+
+        if x != w {
+            z *= 26;
+            z += w + add_y[n];
+        }
+
+        z %= 26*26;
+    }
+
+    z
+}
+
+// struct ModEq {
+//     modulo: Option<i64>,
+//     equals: i64
+// }
+
+// impl ModEq {
+
+// }
+
+// fn invert_step(mut z: i64, n: usize) {
+//     // x == w
+
+//     (1..10).map(|w| {
+//         ModEq(26, Some((w - x_add[n])))
+//     });
+
+// }
 
 fn model_no_to_inputs(mut model_number: i64) -> Option<Vec<i64>> {
     let mut output = Vec::with_capacity(14);
@@ -917,6 +970,41 @@ mod test {
     #[test]
     fn test_condensed_rust_program_11111111111111() {
         let inputs = model_no_to_inputs(11111111111111).unwrap();
+
+
+        let condensed_output = rust_program_condensed(&inputs);
+
+        let test_data = get_test_input();
+
+        let mut machine = Machine::new();
+
+        machine.execute(&test_data, &inputs);
+        let machien_output = machine.registers[3];
+
+        assert_eq!(machien_output, condensed_output);
+    }
+
+
+    #[test]
+    fn test_condensed_rust_program_97919997299495() {
+        let inputs = model_no_to_inputs(97919997299495).unwrap();
+
+
+        let condensed_output = rust_program_condensed(&inputs);
+
+        let test_data = get_test_input();
+
+        let mut machine = Machine::new();
+
+        machine.execute(&test_data, &inputs);
+        let machien_output = machine.registers[3];
+
+        assert_eq!(machien_output, condensed_output);
+    }
+
+    #[test]
+    fn test_condensed_rust_program_51619131181131() {
+        let inputs = model_no_to_inputs(51619131181131).unwrap();
 
 
         let condensed_output = rust_program_condensed(&inputs);

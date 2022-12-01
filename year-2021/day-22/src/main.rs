@@ -268,7 +268,7 @@ impl KDTreeNode {
 
         match self {
             KDTreeNode::Leaf(nodes) if nodes.len() > 5 => {
-                let old_volume: usize = nodes.iter().map(Cuboid::get_volume).sum();
+                //let old_volume: usize = nodes.iter().map(Cuboid::get_volume).sum();
 
                 let split_axis = parent_split_axis.map(|a| (a + 1) % 3).unwrap_or(0);
 
@@ -295,11 +295,11 @@ impl KDTreeNode {
                     right: Box::new(KDTreeNode::Leaf(right)),
                 };
 
-                assert_eq!(new_node.get_volume(), old_volume);
+                //assert_eq!(new_node.get_volume(), old_volume);
 
                 new_node.balance(Some(split_axis));
 
-                assert_eq!(new_node.get_volume(), old_volume);
+                //assert_eq!(new_node.get_volume(), old_volume);
 
                 replacement = Some(new_node);
             }
@@ -353,8 +353,6 @@ fn main() {
         parse_input(stdin_lock)
     };
 
-    dbg!(&input);
-
     let extent = Extent3i::from_min_and_shape(Point3i::fill(-50), Point3i::fill(101));
 
     let mut map: Array3x1<i32> = Array3x1::fill(extent, 0);
@@ -362,19 +360,12 @@ fn main() {
     for cmd in input.iter() {
         let cmd_extent = cmd.cuboid.to_extent();
 
-        dbg!(&cmd_extent);
-
         let val = if cmd.on { 1 } else { 0 };
 
-        dbg!(val);
-
-        //*map.get_mut(PointN([0, 0, 0])) = 1;
         map.fill_extent(&cmd_extent, val);
     }
 
     let mut lit_cells = 0;
-
-    dbg!(map.extent());
 
     map.for_each(&map.extent(), |p: Point3i, val: i32| {
         if val != 0 {
