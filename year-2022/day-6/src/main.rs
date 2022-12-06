@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::io::{self, Read};
 
-use day_6::scan_for_start;
+use day_6::*;
 
 type Input = String;
 
@@ -21,9 +21,9 @@ fn main() {
 
     dbg!(&input);
 
-    dbg!(scan_for_start(&input, 4));
+    dbg!(scan_for_start_3(&input, 4));
 
-    dbg!(scan_for_start(&input, 14));
+    dbg!(scan_for_start_3(&input, 14));
 }
 
 #[cfg(test)]
