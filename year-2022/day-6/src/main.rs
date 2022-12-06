@@ -1,27 +1,31 @@
-use std::io::{self, BufRead};
+use std::collections::VecDeque;
+use std::io::{self, Read};
 
 type Input = String;
 
-fn parse_input(mut reader: impl BufRead) -> Input {
-    reader.lines().map(|l| l.unwrap()).next().unwrap()
+fn parse_input(mut reader: impl Read) -> Input {
+    let mut buffer = String::new();
+    reader.read_to_string(&mut buffer).unwrap();
+    buffer
 }
 
 fn scan_for_start(packet: &str, sz: usize) -> usize {
-    for i in 0..packet.len() - sz {
-        let start = &packet[i..i + sz];
+    // queue is most recently seen first so we can easily truncate off
+    // the start of message seq
+    let mut start_seq = VecDeque::with_capacity(sz);
 
-        let mut found = true;
+    for (cur_pos, ch) in packet.chars().enumerate() {
+        let maybe_duplicate_index = start_seq.iter().copied().position(|seq_ch| seq_ch == ch);
 
-        for n in 0usize..sz {
-            for m in n + 1usize..sz {
-                if start[n..n + 1] == start[m..m + 1] {
-                    found = false;
-                }
-            }
+        // Remove the oldest part of the sequence up to and including the duplicating character
+        if let Some(duplicate_index) = maybe_duplicate_index {
+            start_seq.truncate(duplicate_index);
         }
 
-        if found {
-            return i + sz;
+        start_seq.push_front(ch);
+
+        if start_seq.len() == sz {
+            return cur_pos + 1;
         }
     }
 
@@ -60,6 +64,6 @@ mod test {
     fn test_parse() {
         let test_data = get_test_input();
 
-        assert_eq!(scan_for_start(&test_data), 0);
+        assert_eq!(scan_for_start(&test_data, 4), 7);
     }
 }
