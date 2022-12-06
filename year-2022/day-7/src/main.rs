@@ -1,16 +1,10 @@
-use std::collections::VecDeque;
-use std::io::{self, Read};
+use std::io::{self, BufRead};
 
-use day_6::scan_for_start;
+type Input = Vec<i32>;
 
-type Input = String;
-
-fn parse_input(mut reader: impl Read) -> Input {
-    let mut buffer = String::new();
-    reader.read_to_string(&mut buffer).unwrap();
-    buffer
+fn parse_input(mut reader: impl BufRead) -> Input {
+    unimplemented!()
 }
-
 
 fn main() {
     let input = {
@@ -20,17 +14,13 @@ fn main() {
     };
 
     dbg!(&input);
-
-    dbg!(scan_for_start(&input, 4));
-
-    dbg!(scan_for_start(&input, 14));
 }
 
 #[cfg(test)]
 mod test {
     use std::io::Cursor;
 
-    use crate::{parse_input, scan_for_start, Input};
+    use crate::{parse_input, Input};
 
     fn get_test_input() -> Input {
         let test_data_str = include_str!("../test_input.txt");
@@ -43,7 +33,5 @@ mod test {
     #[test]
     fn test_parse() {
         let test_data = get_test_input();
-
-        assert_eq!(scan_for_start(&test_data, 4), 7);
     }
 }
