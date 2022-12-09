@@ -123,7 +123,7 @@ fn main() {
 mod test {
     use std::io::Cursor;
 
-    use crate::{parse_input, Input, Point, SimState, Vec2, simulate_and_count_tail_positions};
+    use crate::{parse_input, simulate_and_count_tail_positions, Input, Point, SimState, Vec2};
 
     fn get_test_input() -> Input {
         let test_data_str = include_str!("../test_input.txt");
