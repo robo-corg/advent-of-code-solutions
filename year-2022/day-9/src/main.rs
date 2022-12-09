@@ -28,10 +28,10 @@ fn parse_input(mut reader: impl BufRead) -> Input {
 }
 
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct SimState {
     head: Point,
-    tail: Point,
+    knots: Vec<Point>,
 }
 
 fn signum_vec(v: Vec2) -> Vec2 {
@@ -49,21 +49,43 @@ fn movement_steps(movement: Vec2) -> impl Iterator<Item=Vec2> {
 }
 
 impl SimState {
+    fn new(rope_len: usize) -> Self {
+        SimState {
+            head: Point::default(),
+            knots: vec![Point::default(); rope_len],
+        }
+    }
+
     fn unit_step(&self, unit_movement: Vec2) -> SimState {
         let new_head = self.head + unit_movement;
 
-        let delta = new_head - self.tail;
+        let mut new_knots = self.knots.clone();
 
-        let travel_delta = if i32::abs(delta.x) <= 1 && i32::abs(delta.y) <= 1 {
-            // touching
-            Vec2::new(0, 0)
-        } else {
-            Vec2::new(i32::signum(delta.x), i32::signum(delta.y))
-        };
+        for knot_index in 0..new_knots.len() {
+            let head = if knot_index == 0 {
+                new_head
+            }
+            else {
+                new_knots[knot_index-1]
+            };
+
+            let cur_knot = new_knots[knot_index];
+
+            let delta = head - cur_knot;
+
+            let travel_delta = if i32::abs(delta.x) <= 1 && i32::abs(delta.y) <= 1 {
+                // touching
+                Vec2::new(0, 0)
+            } else {
+                Vec2::new(i32::signum(delta.x), i32::signum(delta.y))
+            };
+
+            new_knots[knot_index] = cur_knot + travel_delta;
+        }
 
         SimState {
             head: new_head,
-            tail: self.tail + travel_delta,
+            knots: new_knots,
         }
     }
 
@@ -93,6 +115,22 @@ impl SimState {
     }
 }
 
+fn simulate_and_count_tail_positions(input: &[Vec2], rope_len: usize) -> usize {
+    let state = SimState::new(rope_len);
+
+    let states: Vec<SimState> = state.apply_movements(input).collect();
+
+    //dbg!(&states);
+
+    let mut tail_positions = HashSet::new();
+
+    for st in states.iter() {
+        tail_positions.insert(st.knots.last().unwrap().clone());
+    }
+
+    tail_positions.len()
+}
+
 fn main() {
     let input = {
         let stdin = io::stdin();
@@ -102,19 +140,9 @@ fn main() {
 
     dbg!(&input);
 
-    let state = SimState::default();
 
-    let states: Vec<SimState> = state.apply_movements(&input).collect();
-
-    dbg!(&states);
-
-    let mut tail_positions = HashSet::new();
-
-    for st in states.iter() {
-        tail_positions.insert(st.tail);
-    }
-
-    dbg!(tail_positions.len());
+    dbg!(simulate_and_count_tail_positions(&input, 1));
+    dbg!(simulate_and_count_tail_positions(&input, 9));
 }
 
 #[cfg(test)]
