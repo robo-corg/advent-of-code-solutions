@@ -92,7 +92,15 @@ impl<'a> Add for &'a MonkeyNum {
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
-            MonkeyNum::Modular(_) => todo!(),
+            MonkeyNum::Modular(modular) => match rhs {
+                MonkeyNum::Modular(_) => todo!(),
+                MonkeyNum::Plain(rhs_val) => MonkeyNum::Modular(
+                    modular
+                        .iter()
+                        .map(|(val, val_mod)|((*val + rhs_val) % *val_mod, *val_mod))
+                        .collect(),
+                ),
+            },
             MonkeyNum::Plain(val) => match rhs {
                 MonkeyNum::Modular(_) => todo!(),
                 MonkeyNum::Plain(rhs_val) => MonkeyNum::Plain(*val + *rhs_val),
@@ -107,7 +115,12 @@ impl<'a> Mul for &'a MonkeyNum {
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
             MonkeyNum::Modular(modular) => match rhs {
-                MonkeyNum::Modular(_) => todo!(),
+                MonkeyNum::Modular(modular_rhs) => {
+                    MonkeyNum::Modular(modular.iter().zip(modular_rhs).map(|(lhs, rhs)| {
+                        assert_eq!(lhs.1, rhs.1);
+                        ((lhs.0 * rhs.0) % lhs.1, lhs.1)
+                    }).collect())
+                },
                 MonkeyNum::Plain(rhs_val) => MonkeyNum::Modular(
                     modular
                         .iter()
@@ -123,21 +136,21 @@ impl<'a> Mul for &'a MonkeyNum {
     }
 }
 
-impl<'a> Rem for &'a MonkeyNum {
-    type Output = MonkeyNum;
+// impl<'a> Rem for &'a MonkeyNum {
+//     type Output = MonkeyNum;
 
-    fn rem(self, rhs: Self) -> Self::Output {
-        match self {
-            MonkeyNum::Modular(modular) => {
+//     fn rem(self, rhs: Self) -> Self::Output {
+//         match self {
+//             MonkeyNum::Modular(modular) => {
 
-            },
-            MonkeyNum::Plain(val) => match rhs {
-                MonkeyNum::Modular(_) => todo!(),
-                MonkeyNum::Plain(rhs_val) => MonkeyNum::Plain(*val % *rhs_val),
-            },
-        }
-    }
-}
+//             },
+//             MonkeyNum::Plain(val) => match rhs {
+//                 MonkeyNum::Modular(_) => todo!(),
+//                 MonkeyNum::Plain(rhs_val) => MonkeyNum::Plain(*val % *rhs_val),
+//             },
+//         }
+//     }
+// }
 
 impl Operation {
     fn eval(&self, old: &ValueType) -> ValueType {
@@ -160,15 +173,27 @@ impl Operation {
 
 #[derive(Clone, Debug)]
 enum Test {
-    DivisibleBy(i32),
+    DivisibleBy(i64),
 }
 
 impl Test {
     fn eval(&self, new_item: &ValueType) -> bool {
         match self {
             Test::DivisibleBy(amount) => {
-                let amount_val: ValueType = (*amount).into();
-                (new_item % &amount_val) == MonkeyNum::zero()
+                match new_item {
+                    MonkeyNum::Modular(modular) => {
+                        for (val, val_mod) in modular.iter() {
+                            if val_mod == amount {
+                                return *val == 0;
+                            }
+                        }
+
+                        panic!("Attempting to mod monkeynum by unknown divisor");
+                    },
+                    MonkeyNum::Plain(val) => {
+                        (val % amount) == 0
+                    },
+                }
             }
         }
     }
@@ -305,29 +330,36 @@ fn main() {
     // dbg!(execute_round(&input));
     // dbg!(execute_round(&execute_round(&input)));
 
-    let mut cur_monkeys = input.clone();
+    {
+        let mut cur_monkeys = input.clone();
 
-    for _ in 0..20 {
-        cur_monkeys = execute_round(&cur_monkeys, true);
+        for _ in 0..20 {
+            cur_monkeys = execute_round(&cur_monkeys, true);
+        }
+
+        //dbg!(&cur_monkeys);
+
+        let mut inspections: Vec<usize> = cur_monkeys.iter().map(|m| m.inspect_count).collect();
+        inspections.sort();
+        inspections.reverse();
+        dbg!(inspections[0] * inspections[1]);
     }
 
-    //dbg!(&cur_monkeys);
+    {
+        let mut cur_monkeys = input.clone();
 
-    let mut inspections: Vec<usize> = cur_monkeys.iter().map(|m| m.inspect_count).collect();
-    inspections.sort();
-    inspections.reverse();
-    dbg!(inspections[0] * inspections[1]);
+        for _ in 0..10000 {
+            cur_monkeys = execute_round(&cur_monkeys, false);
+        }
 
-    for _ in 0..1000 {
-        cur_monkeys = execute_round(&cur_monkeys, false);
+        //dbg!(&cur_monkeys);
+
+        let mut inspections: Vec<usize> = cur_monkeys.iter().map(|m| m.inspect_count).collect();
+        inspections.sort();
+        inspections.reverse();
+        dbg!(&inspections);
+        dbg!(inspections[0] * inspections[1]);
     }
-
-    //dbg!(&cur_monkeys);
-
-    let mut inspections: Vec<usize> = cur_monkeys.iter().map(|m| m.inspect_count).collect();
-    inspections.sort();
-    inspections.reverse();
-    dbg!(inspections[0] * inspections[1]);
 }
 
 #[cfg(test)]
