@@ -26,8 +26,6 @@ fn parse_input(mut reader: impl BufRead) -> Input {
         .map(|line| {
             let captures = re.captures(&line).unwrap();
 
-            dbg!(&captures);
-
             (
                 Point::new(
                     i64::from_str_radix(captures.get(1).unwrap().as_str(), 10).unwrap(),
@@ -198,7 +196,7 @@ fn main() {
         parse_input(stdin_lock)
     };
 
-    dbg!(&input);
+    //dbg!(&input);
 
     //dbg!(non_beacon_positions(&input, 10));
     //dbg!(non_beacon_positions(&input, 2000000));
