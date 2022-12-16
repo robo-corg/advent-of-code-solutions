@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::io::{self, BufRead};
 
 use petgraph::prelude::UnGraphMap;
@@ -60,12 +60,12 @@ fn parse_input(mut reader: impl BufRead) -> Input {
     world
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Hash)]
 struct PlanState {
-    explored: HashSet<NodeName>,
+    visit_order: Vec<NodeName>,
     preasure_released: i32,
     time_elapsed: i32,
-    opened_valves: HashMap<NodeName, i32>,
+    opened_valves: BTreeMap<NodeName, i32>,
 }
 
 impl PlanState {
@@ -94,6 +94,11 @@ impl PlanState {
     fn is_valve_open(&self, valve_name: NodeName) -> bool {
         self.opened_valves.contains_key(&valve_name)
     }
+
+    fn best_score(&self) -> i32 {
+        let s: i32 = self.opened_valves.values().sum();
+        self.preasure_released + s * (29- self.time_elapsed)
+    }
 }
 
 fn pick_best_plan(a: Option<PlanState>, b: Option<PlanState>) -> Option<PlanState> {
@@ -101,7 +106,7 @@ fn pick_best_plan(a: Option<PlanState>, b: Option<PlanState>) -> Option<PlanStat
         (None, None) => None,
         (None, Some(a)) => Some(a),
         (Some(a), None) => Some(a),
-        (Some(a), Some(b)) => if a.preasure_released > b.preasure_released {
+        (Some(a), Some(b)) => if a.best_score() > b.best_score() {
             Some(a)
         } else {
             Some(b)
@@ -109,18 +114,26 @@ fn pick_best_plan(a: Option<PlanState>, b: Option<PlanState>) -> Option<PlanStat
     }
 }
 
-fn plan(map: &World, start_pos: NodeName, mut status: PlanState) -> Option<PlanState> {
+fn plan(map: &World, explored: &mut HashSet<PlanState>, start_pos: NodeName, mut status: PlanState) -> Option<PlanState> {
     let mut best_new_plan = None;
 
     let cur_room_valve_flow = map.valves[&start_pos];
 
-    status.explored.insert(start_pos);
+    status.visit_order.push(start_pos);
 
-    if status.explored.len() == map.connections.node_count() || !status.can_do_action() {
+    if explored.contains(&status) {
         return Some(status);
     }
 
-    //dbg!(status.explored.len(), status.time_elapsed);
+    explored.insert(status.clone());
+
+    dbg!(explored.len());
+
+    if !status.can_do_action() || status.preasure_released > 1500 {
+        return Some(status);
+    }
+
+    //dbg!(status.explored.len(), status.time_elapsed, status.preasure_released);
 
     let open_valve_plan = if cur_room_valve_flow > 0 && !status.is_valve_open(start_pos) && status.can_do_action() {
         Some(status.open_valve(start_pos, cur_room_valve_flow))
@@ -150,7 +163,7 @@ fn plan(map: &World, start_pos: NodeName, mut status: PlanState) -> Option<PlanS
 
             new_plan.tick();
 
-            best_new_plan = pick_best_plan(best_new_plan, plan(map, neighbor, new_plan));
+            best_new_plan = pick_best_plan(best_new_plan, plan(map, explored, neighbor, new_plan));
         }
     }
 
@@ -166,7 +179,9 @@ fn main() {
 
     dbg!(&input);
 
-    let best_plan = plan(&input, parse_node_name("AA"), PlanState::default());
+    let mut explored = HashSet::new();
+
+    let best_plan = plan(&input, &mut explored, parse_node_name("AA"), PlanState::default());
 
     dbg!(best_plan);
 }
