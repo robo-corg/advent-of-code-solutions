@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{BTreeMap, HashMap, HashSet, BinaryHeap};
 use std::io::{self, BufRead};
 
 use petgraph::prelude::UnGraphMap;
@@ -23,10 +23,8 @@ fn parse_node_name(name: &str) -> NodeName {
 
 fn parse_input(mut reader: impl BufRead) -> Input {
     // Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
-    let re = Regex::new(
-        r"Valve ([A-Z]{2}) has flow rate=(\d+); tunnels? leads? to valves? (.+)*$",
-    )
-    .unwrap();
+    let re = Regex::new(r"Valve ([A-Z]{2}) has flow rate=(\d+); tunnels? leads? to valves? (.+)*$")
+        .unwrap();
 
     let mut lines = reader.lines().map(|l| l.unwrap());
 
@@ -47,7 +45,6 @@ fn parse_input(mut reader: impl BufRead) -> Input {
 
         let connections_s = captures_iter.next().unwrap().unwrap().as_str();
 
-
         for connection in connections_s.split(", ").map(parse_node_name) {
             dbg!((cur_room, connection));
             world.connections.add_node(connection);
@@ -62,17 +59,28 @@ fn parse_input(mut reader: impl BufRead) -> Input {
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Hash)]
 struct PlanState {
-    visit_order: Vec<NodeName>,
+    cur_location: NodeName,
+    elephant_location: Option<NodeName>,
     preasure_released: i32,
     time_elapsed: i32,
     opened_valves: BTreeMap<NodeName, i32>,
 }
 
 impl PlanState {
-    fn open_valve(&self, valve_name: NodeName, flow: i32) -> Self {
+    fn new(cur_location: NodeName, elephant: bool) -> Self {
+        PlanState {
+            cur_location,
+            elephant_location: if elephant { Some(cur_location) } else { None },
+            preasure_released: 0,
+            time_elapsed: 0,
+            opened_valves: Default::default(),
+        }
+    }
+
+    fn open_valve(&self, actor: Actor, flow: i32) -> Self {
         let mut new_state = self.clone();
-        new_state.tick();
-        new_state.opened_valves.insert(valve_name, flow);
+        //new_state.tick();
+        new_state.opened_valves.insert(self.location_of(actor), flow);
         new_state
     }
 
@@ -83,92 +91,273 @@ impl PlanState {
         self.time_elapsed += 1;
     }
 
+
     fn has_time_left(&self) -> bool {
-        self.time_elapsed < 30
+        self.time_elapsed < self.max_time()
     }
 
     fn can_do_action(&self) -> bool {
-        self.time_elapsed < 29
+        self.time_elapsed < self.max_time()
     }
 
-    fn is_valve_open(&self, valve_name: NodeName) -> bool {
-        self.opened_valves.contains_key(&valve_name)
+    fn location_of(&self, actor: Actor) -> NodeName {
+        match actor {
+            Actor::Human => self.cur_location,
+            Actor::Elephant => self.elephant_location.unwrap(),
+        }
+    }
+
+    fn is_valve_open(&self, actor: Actor) -> bool {
+        self.opened_valves.contains_key(&self.location_of(actor))
     }
 
     fn best_score(&self) -> i32 {
         let s: i32 = self.opened_valves.values().sum();
-        self.preasure_released + s * (29- self.time_elapsed)
+        self.preasure_released + s * (self.max_time() - self.time_elapsed)
+    }
+
+    fn max_time(&self) -> i32 {
+        if self.elephant_location.is_some() {
+            26
+        }
+        else {
+            30
+        }
+    }
+
+    fn apply_action(&mut self, actor: Actor, action: Action) {
+        match action {
+            Action::OpenValve(flow) => {
+                *self = self.open_valve(actor, flow);
+            },
+            Action::MoveTo(new_location) => {
+                match actor {
+                    Actor::Human => { self.cur_location = new_location; },
+                    Actor::Elephant => {self.elephant_location = Some(new_location); },
+                }
+            },
+        }
+    }
+
+    fn remaining_ticks(&self) -> i32 {
+        self.max_time() - self.time_elapsed
+    }
+
+    fn estimate_best(&self, map: &World) -> i32 {
+        let mut hypothetical = self.clone();
+
+        for (valve_name, flow) in map.valves.iter().take((self.remaining_ticks() * 2) as usize) {
+            hypothetical.opened_valves.insert(*valve_name, *flow);
+        }
+
+        hypothetical.best_score()
+    }
+
+    fn next_actions<'a>(&self, map: &'a World, actor: Actor) -> impl Iterator<Item=Action> + 'a {
+        let cur_room_valve_flow = map.valves[&self.location_of(actor)];
+
+        let valve_open_action = if cur_room_valve_flow > 0 && !self.is_valve_open(actor) && self.can_do_action() {
+            Some(Action::OpenValve(cur_room_valve_flow))
+        }
+        else {
+            None
+        };
+
+        valve_open_action.into_iter().chain(
+            map.connections.neighbors(self.location_of(actor)).map(|neighbor| {
+                Action::MoveTo(neighbor)
+            })
+        )
     }
 }
 
-fn pick_best_plan(a: Option<PlanState>, b: Option<PlanState>) -> Option<PlanState> {
-    match (a, b) {
-        (None, None) => None,
-        (None, Some(a)) => Some(a),
-        (Some(a), None) => Some(a),
-        (Some(a), Some(b)) => if a.best_score() > b.best_score() {
-            Some(a)
-        } else {
-            Some(b)
-        },
-    }
-}
-
-fn plan(map: &World, explored: &mut HashSet<PlanState>, start_pos: NodeName, mut status: PlanState) -> Option<PlanState> {
-    let mut best_new_plan = None;
-
-    let cur_room_valve_flow = map.valves[&start_pos];
-
-    status.visit_order.push(start_pos);
-
-    if explored.contains(&status) {
-        return Some(status);
-    }
-
-    explored.insert(status.clone());
-
-    dbg!(explored.len());
-
-    if !status.can_do_action() || status.preasure_released > 1500 {
-        return Some(status);
-    }
-
-    //dbg!(status.explored.len(), status.time_elapsed, status.preasure_released);
-
-    let open_valve_plan = if cur_room_valve_flow > 0 && !status.is_valve_open(start_pos) && status.can_do_action() {
-        Some(status.open_valve(start_pos, cur_room_valve_flow))
+fn pick_best_plan(a: PlanState, b: PlanState) -> PlanState {
+    if a.preasure_released > b.preasure_released {
+        a
     } else {
-        None
-    };
-
-    let mut base_plans = [
-        Some(status),
-        open_valve_plan
-    ];
-
-    for base_plan in base_plans.iter().filter_map(|p| p.as_ref()) {
-        best_new_plan = pick_best_plan(best_new_plan, Some(base_plan.clone()));
+        b
     }
+}
 
-    for base_plan in base_plans.iter().filter_map(|p| p.as_ref()) {
-        if !base_plan.can_do_action() {
+#[derive(Debug, Eq)]
+struct VisitItem {
+    estimated_best: i32,
+    state: PlanState,
+}
+
+impl PartialEq for VisitItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.estimated_best == other.estimated_best
+    }
+}
+
+impl PartialOrd for VisitItem {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for VisitItem {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.estimated_best.cmp(&other.estimated_best)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum Actor {
+    Human,
+    Elephant
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum ActionType {
+    OpenValve,
+    MoveTo
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum Action {
+    OpenValve(i32),
+    MoveTo(NodeName)
+}
+
+fn plan(map: &World, explored: &mut HashSet<PlanState>, mut status: PlanState) -> PlanState {
+    let mut visit_queue = BinaryHeap::new();
+    let mut best_new_plan: PlanState = status.clone();
+
+    visit_queue.push(VisitItem {
+        estimated_best: status.estimate_best(map),
+        state: status,
+    });
+    //costs.insert(start_pos, get_cost(&map, start_pos));
+
+    while let Some(visit_item) = visit_queue.pop() {
+        let VisitItem {
+            estimated_best: current_estimated_cost,
+            state: status,
+        } = visit_item;
+
+        // if visit_queue.len() > 1000000 {
+        //     println!("Cleaning queue");
+        //     let old_count = visit_queue.len();
+        //     let mut new_queue = BinaryHeap::new();
+        //     for item in visit_queue.drain() {
+        //         if best_new_plan.preasure_released < item.state.estimate_best(map) {
+        //             new_queue.push(item);
+        //         }
+        //     }
+
+        //     println!("Removed {} items", old_count - new_queue.len());
+
+        //     visit_queue = new_queue;
+        // }
+
+        if best_new_plan.preasure_released < status.preasure_released {
+            println!("{} queue:{} estimate:{}", status.preasure_released, visit_queue.len(), current_estimated_cost);
+        }
+
+        best_new_plan = pick_best_plan(best_new_plan, status.clone());
+
+        if explored.contains(&status) {
             continue;
         }
 
-        for neighbor in map.connections.neighbors(start_pos) {
-            // if base_plan.explored.contains(&neighbor) {
-            //     continue;
-            // }
-            let mut new_plan = base_plan.clone();
+        if best_new_plan.preasure_released > status.estimate_best(map) {
+            continue;
+        }
 
-            new_plan.tick();
+        explored.insert(status.clone());
 
-            best_new_plan = pick_best_plan(best_new_plan, plan(map, explored, neighbor, new_plan));
+        //dbg!(explored.len(), status.preasure_released);
+
+        if !status.can_do_action() {
+            continue;
+        }
+
+
+        let human_actions: Vec<Action> = status.next_actions(map, Actor::Human).collect();
+        let elephant_actions: Vec<Action> = status.next_actions(map, Actor::Elephant).collect();
+
+        for human_action in human_actions.iter() {
+            for elephant_action in elephant_actions.iter() {
+                let mut new_plan = status.clone();
+
+                new_plan.tick();
+
+                new_plan.apply_action(Actor::Human, *human_action);
+                new_plan.apply_action(Actor::Elephant, *elephant_action);
+
+                if !explored.contains(&new_plan) {
+                    if best_new_plan.preasure_released < new_plan.estimate_best(map) {
+                        visit_queue.push(VisitItem {
+                            estimated_best: new_plan.estimate_best(map),
+                            state: new_plan,
+                        });
+                    }
+                }
+            }
         }
     }
 
     best_new_plan
 }
+
+// fn plan1(
+//     map: &World,
+//     explored: &mut HashSet<PlanState>,
+//     mut status: PlanState,
+// ) -> Option<PlanState> {
+//     let mut best_new_plan = None;
+
+//     let cur_room_valve_flow = map.valves[&status.cur_location];
+
+//     if explored.contains(&status) {
+//         return Some(status);
+//     }
+
+//     explored.insert(status.clone());
+
+//     //dbg!(explored.len(), status.preasure_released);
+
+//     if !status.can_do_action() {
+//         return Some(status);
+//     }
+
+//     //dbg!(status.explored.len(), status.time_elapsed, status.preasure_released);
+
+//     let open_valve_plan =
+//         if cur_room_valve_flow > 0 && !status.is_valve_open() && status.can_do_action() {
+//             Some(status.open_valve(cur_room_valve_flow))
+//         } else {
+//             None
+//         };
+
+//     let mut base_plans = [Some(status), open_valve_plan];
+
+//     for base_plan in base_plans.iter().filter_map(|p| p.as_ref()) {
+//         best_new_plan = pick_best_plan(best_new_plan, Some(base_plan.clone()));
+//     }
+
+//     for base_plan in base_plans.iter().filter_map(|p| p.as_ref()) {
+//         if !base_plan.can_do_action() {
+//             continue;
+//         }
+
+//         for neighbor in map.connections.neighbors(base_plan.cur_location) {
+//             // if base_plan.explored.contains(&neighbor) {
+//             //     continue;
+//             // }
+//             let mut new_plan = base_plan.clone();
+
+//             new_plan.tick();
+//             new_plan.cur_location = neighbor;
+
+//             best_new_plan = pick_best_plan(best_new_plan, plan(map, explored, new_plan));
+//         }
+//     }
+
+//     best_new_plan
+// }
 
 fn main() {
     let input = {
@@ -181,7 +370,11 @@ fn main() {
 
     let mut explored = HashSet::new();
 
-    let best_plan = plan(&input, &mut explored, parse_node_name("AA"), PlanState::default());
+    let best_plan = plan(
+        &input,
+        &mut explored,
+        PlanState::new(parse_node_name("AA"), true),
+    );
 
     dbg!(best_plan);
 }
