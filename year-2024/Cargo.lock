@@ -33,6 +33,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
+name = "bigdecimal"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f31f3af01c5c65a07985c804d3366560e6fa7883d640a122819b14ec327482c"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -52,6 +65,15 @@ dependencies = [
  "anyhow",
  "nalgebra",
  "ndarray",
+]
+
+[[package]]
+name = "day-11"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bigdecimal",
+ "nalgebra",
 ]
 
 [[package]]
@@ -115,6 +137,12 @@ dependencies = [
  "anyhow",
  "nalgebra",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8355be11b20d696c8f18f6cc018c4e372165b1fa8126cef092399c9951984ffa"
 
 [[package]]
 name = "matrixmultiply"
