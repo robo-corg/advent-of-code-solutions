@@ -6,11 +6,17 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use anyhow::Result;
 use bigdecimal::{BigDecimal, FromPrimitive};
+use rayon::prelude::*;
 
 type Pos = nalgebra::Point2<i32>;
 type Vec2 = nalgebra::Vector2<i32>;
 
 type Input = StoneStore;
+
+struct Stone {
+    num: u64,
+    exp_2024: u32
+}
 
 
 #[derive(Debug, Clone)]
@@ -61,6 +67,43 @@ fn parse_input(mut reader: impl BufRead) -> Result<Input> {
 }
 
 fn step(nums: &mut StoneStore) {
+    let mut n = 0;
+    let length = nums.len();
+
+
+    let mut new_stones = Vec::with_capacity(1024);
+
+    let zero = BigDecimal::from_i32(0).unwrap();
+    let one = BigDecimal::from_i32(1).unwrap();
+    let magic = BigDecimal::from_i32(2024).unwrap();
+
+    for num in nums.iter_mut() {
+        if *num == zero {
+            *num = one.clone();
+        }
+        else if num.digits() % 2 == 0 {
+            let nums_str = num.to_plain_string();
+
+            let mid = nums_str.len()/2;
+
+            let a_s = &nums_str[0..mid];
+            let b_s = &nums_str[mid..];
+
+            let a = BigDecimal::from_str(a_s).unwrap();
+            let b = BigDecimal::from_str(b_s).unwrap();
+
+            *num = a;
+            new_stones.push(b);
+        }
+        else {
+            *num *= magic.clone();
+        }
+    }
+
+    nums.add_chunk(new_stones);
+}
+
+fn step_par(nums: &mut StoneStore) {
     let mut n = 0;
     let length = nums.len();
 
@@ -189,12 +232,12 @@ fn task_worker(source: Arc<TaskSource>, total: Arc<AtomicUsize>) {
     }
 }
 
-fn run_stones(stones: StoneStore, steps_needed: u32) -> usize {
+fn run_stones(stones: StoneStore, steps_needed: u32) -> u128 {
     let mut tasks = BinaryHeap::new();
 
     tasks.push(Task { stones, steps_needed });
 
-    let mut total = 0;
+    let mut total: u128 = 0;
 
     'outer: while let Some(mut task) = tasks.pop() {
         //dbg!(task.steps_needed, tasks.len(), total);
@@ -212,7 +255,7 @@ fn run_stones(stones: StoneStore, steps_needed: u32) -> usize {
             task.steps_needed -= 1;
         }
 
-        total += task.stones.len();
+        total.saturating_add(task.stones.len() as u128);
     }
 
     total
@@ -266,7 +309,7 @@ fn main() -> Result<()> {
 
     //let mut part2_total = run_stones(part2_nums, 50);
 
-    let part2_total = run_stones_par(part2_nums, 50);
+    let part2_total = run_stones(part2_nums, 50);
 
     println!();
 
