@@ -8,3 +8,17 @@ anyhow = "1.0.94"
 bigdecimal = "0.4.7"
 nalgebra = "0.33.2"
 rayon = "1.10.0"
+rustc-hash = "2.1.0"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "stones"
+harness = false
+
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[profile.release]
+debug = true
