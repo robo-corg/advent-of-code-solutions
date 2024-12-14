@@ -84,8 +84,12 @@ fn main() -> Result<()> {
         let mat_f = mat.cast::<f64>();
         let prize_f = claw_machine.prize.cast::<f64>().coords;
 
-        let decomp = mat_f.clone().lu();
-        let x = decomp.solve(&prize_f).expect("Linear resolution failed.");
+        // let decomp = mat_f.clone().lu();
+        // let x = decomp.solve(&prize_f).expect("Linear resolution failed.");
+
+        let mat_invert = mat_f.try_inverse().unwrap();
+        let x = mat_invert * prize_f;
+
 
         let sol = Vec2::new(
             f64::round(x[0]) as i64,
@@ -95,6 +99,7 @@ fn main() -> Result<()> {
         let should_be_prize = mat * sol;
 
         if should_be_prize == claw_machine.prize.coords {
+            println!("{:?} {:?}", claw_machine.prize, sol.cast() - x);
             let cost = sol.dot(&token_cost);
             //println!("{:?} : {:?} cost: {}", sol, claw_machine.prize, cost);
 
