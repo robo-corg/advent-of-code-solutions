@@ -1,16 +1,15 @@
-use std::collections::{HashMap, HashSet};
-use std::io::{self, BufRead};
 use anyhow::Result;
 use regex::Regex;
+use std::collections::{HashMap, HashSet};
+use std::io::{self, BufRead};
 
 type Pos = nalgebra::Point2<i64>;
 type Vec2 = nalgebra::Vector2<i64>;
 
-
 #[derive(Debug, Clone)]
 struct Robot {
     pos: Pos,
-    vel: Vec2
+    vel: Vec2,
 }
 
 type Input = Vec<Robot>;
@@ -23,41 +22,35 @@ fn parse_robot(s: &str) -> Robot {
     Robot {
         pos: Pos::new(
             i64::from_str_radix(px_s, 10).unwrap(),
-            i64::from_str_radix(py_s, 10).unwrap()
+            i64::from_str_radix(py_s, 10).unwrap(),
         ),
         vel: Vec2::new(
             i64::from_str_radix(vx_s, 10).unwrap(),
-            i64::from_str_radix(vy_s, 10).unwrap()
-        )
+            i64::from_str_radix(vy_s, 10).unwrap(),
+        ),
     }
 }
 
-
 fn parse_input(mut reader: impl BufRead) -> Result<Input> {
-    let robots = reader.lines().map(|l| {
-        parse_robot(&l.unwrap())
-    }).collect();
+    let robots = reader.lines().map(|l| parse_robot(&l.unwrap())).collect();
 
     Ok(robots)
 }
 
 fn sim_robots(robots: &Vec<Robot>, steps: i64, map_size: Vec2) -> Vec<Robot> {
-    robots.iter().map(|robot| {
-        let p = robot.pos + robot.vel*steps;
+    robots
+        .iter()
+        .map(|robot| {
+            let p = robot.pos + robot.vel * steps;
 
-        let pos = Pos::new(
-            p[0].rem_euclid(map_size[0]),
-            p[1].rem_euclid(map_size[1])
-        );
+            let pos = Pos::new(p[0].rem_euclid(map_size[0]), p[1].rem_euclid(map_size[1]));
 
-        assert!(pos[0] >= 0);
-        assert!(pos[1] >= 0);
+            assert!(pos[0] >= 0);
+            assert!(pos[1] >= 0);
 
-        Robot {
-            pos,
-            ..*robot
-        }
-    }).collect()
+            Robot { pos, ..*robot }
+        })
+        .collect()
 }
 
 fn print_robots(robots: &Vec<Robot>, map_size: Vec2) {
@@ -71,8 +64,7 @@ fn print_robots(robots: &Vec<Robot>, map_size: Vec2) {
         for x in 0..map_size[0] {
             if let Some(count) = robots_at.get(&Pos::new(x, y)) {
                 print!("{}", count);
-            }
-            else {
+            } else {
                 print!(".");
             }
         }
@@ -81,32 +73,34 @@ fn print_robots(robots: &Vec<Robot>, map_size: Vec2) {
     }
 }
 
-fn is_sym(robots: &Vec<Robot>, map_size: Vec2) -> bool {
-    let mut robots_at: HashMap<Pos, i64> = HashMap::new();
+fn count_tris(robots: &Vec<Robot>, map_size: Vec2) -> usize {
+    let mut robots_at: HashSet<Pos> = HashSet::with_capacity(robots.len());
+
+    let mut tri_count = 0;
 
     for robot in robots.iter() {
-        *robots_at.entry(robot.pos).or_default() += 1;
+        robots_at.insert(robot.pos);
     }
 
     for y in 0..map_size[1] {
         for x in 0..map_size[0] {
             let p = Pos::new(x, y);
 
-            if !robots_at.contains_key(&p) {
+            if !robots_at.contains(&p) {
                 continue;
             }
 
-            let d1 = robots_at.contains_key(&(p+Vec2::new(1, 1)));
-            let d2 = robots_at.contains_key(&(p+Vec2::new(-1, -1)));
-            let d3 = robots_at.contains_key(&(p+Vec2::new(0, -1)));
+            let d1 = robots_at.contains(&(p + Vec2::new(1, 1)));
+            let d2 = robots_at.contains(&(p + Vec2::new(-1, -1)));
+            let d3 = robots_at.contains(&(p + Vec2::new(0, -1)));
 
             if d1 && d2 && d3 {
-                return true;
+                tri_count += 1;
             }
         }
     }
 
-    false
+    tri_count
 }
 
 fn find_robot_tree(robots: &Vec<Robot>, max_steps: i64, map_size: Vec2) {
@@ -118,10 +112,7 @@ fn find_robot_tree(robots: &Vec<Robot>, max_steps: i64, map_size: Vec2) {
         for robot in robots.iter_mut() {
             let p = robot.pos + robot.vel;
 
-            let pos = Pos::new(
-                p[0].rem_euclid(map_size[0]),
-                p[1].rem_euclid(map_size[1])
-            );
+            let pos = Pos::new(p[0].rem_euclid(map_size[0]), p[1].rem_euclid(map_size[1]));
 
             assert!(pos[0] >= 0);
             assert!(pos[1] >= 0);
@@ -129,13 +120,12 @@ fn find_robot_tree(robots: &Vec<Robot>, max_steps: i64, map_size: Vec2) {
             robot.pos = pos;
         }
 
-        if is_sym(&robots, map_size) {
+        if count_tris(&robots, map_size) >= 6 {
             println!("step: {}", s);
             print_robots(&robots, map_size);
         }
     }
 }
-
 
 fn main() -> Result<()> {
     let map = {
@@ -145,8 +135,6 @@ fn main() -> Result<()> {
     };
 
     dbg!(&map);
-
-
 
     // 101 103
     //let map_size = Vec2::new(11, 7);
