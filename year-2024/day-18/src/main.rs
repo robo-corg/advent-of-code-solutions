@@ -173,10 +173,11 @@ fn main() -> Result<()> {
 
     //let map = Map::part1_from_pushdown_list(pushdown_list, 12, 7, 7);
 
-    let s = 71;
+    let s = 71; let count = 1024;
+    //let s = 7; let count = 12;
 
     {
-        let map = Map::part1_from_pushdown_list(pushdown_list, Some(1024), s as usize, s as usize);
+        let map = Map::part1_from_pushdown_list(pushdown_list.clone(), Some(count), s as usize, s as usize);
 
         //dbg!(&map);
 
@@ -185,6 +186,26 @@ fn main() -> Result<()> {
         //dbg!(&path);
 
         println!("part1: {}", path.len() - 1);
+    }
+
+    {
+        //let found_blocker= None;
+        let mut found = None;
+
+        for c in 0..pushdown_list.len() {
+            let map = Map::part1_from_pushdown_list(pushdown_list.clone(), Some(c), s as usize, s as usize);
+
+            //dbg!(&map);
+
+            let path = dijkstra(&map, Pos::new(0, 0), Pos::new(s-1, s-1));
+
+            if path.is_none() {
+                found = Some(pushdown_list[c-1]);
+                break;
+            }
+        };
+
+        println!("Part2: {:?}", found.unwrap());
     }
 
 

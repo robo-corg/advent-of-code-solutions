@@ -280,9 +280,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "itertools 0.13.0",
- "nalgebra",
- "ndarray",
- "rayon",
  "regex",
 ]
 

@@ -1,12 +1,6 @@
 use anyhow::Result;
-use rayon::prelude::*;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead};
-use std::iter::once;
-
-type Pos = nalgebra::Point2<i64>;
-type Vec2 = nalgebra::Vector2<i64>;
 
 type Input = Machine;
 
@@ -66,19 +60,15 @@ impl Machine {
 
         match inst {
             Inst::Adv => {
-                //eprintln!("{}: ({:?}, {}, {}) <{:?}>", self.ip, inst, self.registers[0], self.get_combo(oper), self.registers);
                 self.registers[0] = dv(self.registers[0], self.get_combo(oper));
             }
             Inst::Bxl => {
-                //eprintln!("{}: ({:?}, {}, {}) <{:?}>", self.ip, inst, self.registers[1], oper, self.registers);
                 self.registers[1] = xl(self.registers[1], oper);
             }
             Inst::Bst => {
-                //eprintln!("{}: ({:?}, {}, {}) <{:?}>", self.ip, inst, self.registers[1], self.get_combo(oper), self.registers);
                 self.registers[1] = st(self.registers[1], self.get_combo(oper));
             }
             Inst::Jnz => {
-                //eprintln!("{}: ({:?}, {}) <{:?}>", self.ip, inst, self.registers[0], self.registers);
                 if self.registers[0] != 0 {
                     self.ip = oper - 2;
                 }
@@ -139,12 +129,12 @@ impl Machine {
 
 /// The adv instruction (opcode 0) performs division. The numerator is the value in the A register. The denominator is found by raising 2 to the power of the instruction's combo operand. (So, an operand of 2 would divide A by 4 (2^2); an operand of 5 would divide A by 2^B.) The result of the division operation is truncated to an integer and then written to the A register.
 fn dv(reg: i64, oper: i64) -> i64 {
-    (reg >> oper)
+    reg >> oper
 }
 
 /// The bxl instruction (opcode 1) calculates the bitwise XOR of register B and the instruction's literal operand, then stores the result in register B.
 fn xl(reg: i64, oper: i64) -> i64 {
-    (reg ^ oper)
+    reg ^ oper
 }
 
 /// The bst instruction (opcode 2) calculates the value of its combo operand modulo 8 (thereby keeping only its lowest 3 bits), then writes that value to the B register.
@@ -153,7 +143,7 @@ fn st(_reg: i64, oper: i64) -> i64 {
 }
 
 fn xc(reg1: i64, reg2: i64) -> i64 {
-    (reg1 ^ reg2)
+    reg1 ^ reg2
 }
 
 fn parse_register(s: &str) -> i64 {
@@ -164,7 +154,7 @@ fn parse_register(s: &str) -> i64 {
     i64::from_str_radix(reg, 10).unwrap()
 }
 
-fn parse_input(mut reader: impl BufRead) -> Result<Input> {
+fn parse_input(reader: impl BufRead) -> Result<Input> {
     let mut lines = reader.lines();
 
     let registers = [(); 3].map(|()| parse_register(&lines.next().unwrap().unwrap()));
@@ -185,45 +175,6 @@ fn parse_input(mut reader: impl BufRead) -> Result<Input> {
     })
 }
 
-fn find_quine(machine: &Machine) -> i64 {
-    (35184372088832..i64::MAX)
-        .into_par_iter()
-        .find_map_first(|reg_a| {
-            let mut m = machine.clone();
-
-            m.registers[0] = reg_a;
-
-            let mut expected_out = machine.program.iter();
-
-            for s in 0..1000 {
-                if s >= 999 {
-                    eprintln!("{}, {}", s, reg_a);
-                }
-
-                let (halt, maybe_out) = m.step();
-
-                if let Some(out) = maybe_out {
-                    let expected = expected_out.next().copied();
-
-                    if expected != Some(out) {
-                        return None;
-                    }
-                }
-
-                if halt {
-                    break;
-                }
-            }
-
-            if expected_out.next().is_none() {
-                return Some(reg_a);
-            }
-
-            None
-        })
-        .unwrap()
-}
-
 fn main() -> Result<()> {
     let machine = {
         let stdin = io::stdin();
@@ -241,22 +192,9 @@ fn main() -> Result<()> {
 
     println!("part1: {}", outs_s);
 
+    let a = find_inv_for_program(&machine.program, machine.clone()).unwrap();
 
-
-    // let part_2_reg_a = find_quine(&machine);
-
-    // println!("part2: {}", part_2_reg_a);
-    let a_seq = find_inv_for_program(&machine.program, machine.clone()).unwrap();
-
-    let mut a_part_2 = 0;
-
-    for (n, a_item) in a_seq.iter().copied().enumerate() {
-        a_part_2 |= a_item;
-    }
-
-    dbg!(a_seq);
-
-    println!("part2: {}", a_part_2);
+    println!("part2: {}", a);
 
     Ok(())
 }
@@ -279,219 +217,85 @@ fn main() -> Result<()> {
 // ADV 3
 // JNZ
 
-// part1: 7,2,4,7,0,3,7,1,3
+fn find_inv_for_program(inputs: &[i64], machine: Machine) -> Option<i64> {
+    let mut inputs_rev = inputs.to_vec();
+    inputs_rev.reverse();
 
-fn prog(init_a: i64) -> Vec<i64> {
-    let mut a = init_a;
-    let mut b = 0;
-    let mut c = 0;
+    machine.remove_last();
 
-    let mut out = Vec::new();
-
-    loop {
-        b = st(0, a);
-        b = xl(b, 2);
-        c = dv(a, b);
-        b = xc(b, c);
-        b = xl(b, 3);
-        out.push(b % 8);
-        a = dv(a, 3);
-
-        if a == 0 {
-            break;
-        }
-    }
-
-    out
+    find_inv_for_program_inner(&inputs_rev, 0, machine)
 }
 
-fn forward_b(a: i64) -> (i64, i64) {
-    let mut b = a & 0b111; //st(0, a);
-    b = b ^ 2; // xl(b, 2);
-               //c = a >> b; //dv(a, b);
-    //dbg!(b);
-    let bits = b;
-    b = b ^ (a >> b); //xc(b, c);
-    b = b ^ 3; //xl(b, 3);
-
-    (b, bits)
-}
-
-// fn inv(out_b: i64, out_b_next: Option<i64>) -> i64 {
-//     for a in 0..65536 {
-//         let a1 = a;
-//         let a2 = a >> 3;
-
-//         if let Some(out_b_next) = out_b_next {
-//             if forward_b(a2) != out_b_next {
-//                 continue;
-//             }
-//         }
-
-//         if forward_b(a1) == out_b {
-//             return a;
-//         }
-//     }
-
-//     panic!("no a solution");
-// }
-
-//  too low: 192348148
-
-fn find_inv_for_program(inputs: &[i64], mut machine: Machine) -> Option<Vec<i64>> {
-    if inputs.is_empty() {
-        return Some(Vec::new());
+fn find_inv_for_program_inner(
+    inputs_rev: &[i64],
+    existing_a: i64,
+    mut machine: Machine,
+) -> Option<i64> {
+    if inputs_rev.len() == 0 {
+        return Some(existing_a);
     }
 
-    dbg!(inputs);
+    for new_a in 0..8 {
+        let a = existing_a << 3 | new_a;
 
-    'outer: for a in 0..0xFFFFFF {
         machine.reset();
         machine.registers[0] = a;
+        machine.registers[1] = 0;
+        machine.registers[2] = 0;
 
         let outs = machine.run_to_halt();
 
+        let out = outs[0];
 
-        if outs.len() == 0 {
-            continue 'outer;
+        if inputs_rev[0] != out {
+            continue;
         }
 
-        let mut next_inputs = inputs;
-
-        let mut a_consume = 0;
-
-        for out in outs.iter().copied() {
-            if out != next_inputs[0] {
-                continue 'outer;
-            }
-
-            next_inputs = &next_inputs[1..];
-            a_consume += 1;
-        }
-
-        dbg!(a, a_consume, machine.registers[0]);
-
-        let mut sol = Vec::new();
-
-        sol.push(a);
-
-        if let Some(next_sol) = find_inv_for_program(next_inputs, machine.clone()) {
-            //sol.extend(next_sol);
-            for s in next_sol {
-                sol.push(s << (a_consume * 3));
-            }
-            return Some(sol);
-        }
-    }   None
-}
-
-// fn find_inv_for_program(p: &[i64]) -> Option<Vec<i64>> {
-//     if p.is_empty() {
-//         return Some(Vec::new());
-//     }
-
-//     dbg!(p);
-
-//     'outer: for a in 0..32 {
-//         let a1 = a;
-
-//         //dbg!(a);
-
-//         // if let Some(out_b_next) = out_b_next {
-//         //     if forward_b(a2) != out_b_next {
-//         //         continue;
-//         //     }
-//         // }
-
-//         //dbg!(forward_b(a1));
-
-
-//         let mut sol = vec![a1];
-
-
-//         let mut p_next = p;
-
-//         let mut a_remain = a;
-
-//         let mut remain_bits = 0;
-
-//         for n in 0..6 {
-//             if (a & (0b111 << (n*3))) != 0 {
-//                 remain_bits += 3;
-//             }
-//         }
-
-//         dbg!(a);
-
-//         loop {
-//             a_remain = a_remain >> 3;
-//             if p_next.len() < 1 {
-//                 continue 'outer;
-//             }
-
-//             let masked_remain = a_remain & 0b111;
-
-//             //dbg!(forward_b(a_remain));
-
-//             let (b, bits_used) = forward_b(a_remain);
-
-//             dbg!(a_remain, b, bits_used, remain_bits);
-
-//             remain_bits = i64::max(0, remain_bits + bits_used - 3);
-
-//             //dbg!(remain_bits);
-
-//             if b == p[0] {
-//                 sol.push(masked_remain);
-//                 p_next = &p[1..];
-//             }
-//             else {
-//                 continue 'outer;
-//             }
-
-//             if remain_bits == 0 {
-//                 //dbg!(a_remain);
-//                 break;
-//             }
-//         }
-
-//         if let Some(next_sol) = find_inv_for_program(p_next) {
-//             sol.extend(next_sol);
-//             return Some(sol);
-//         }
-//     }
-
-//     None
-// }
-
-fn prog_inline(init_a: i64) -> Vec<i64> {
-    let mut a = init_a;
-    let mut b = 0;
-    let mut c = 0;
-
-    let mut out = Vec::new();
-
-    loop {
-        // b = a & 0b111; //st(0, a);
-        // b = b ^ 2; // xl(b, 2);
-        //            //c = a >> b; //dv(a, b);
-        // b = b ^ (a >> b); //xc(b, c);
-        // b = b ^ 3; //xl(b, 3);
-        b = forward_b(a).0;
-        out.push(b % 8);
-        a = a >> 3; //dv(a, 3);
-
-        if a == 0 {
-            break;
+        if let Some(sol_rest) = find_inv_for_program_inner(&inputs_rev[1..], a, machine.clone()) {
+            return Some(sol_rest);
         }
     }
 
-    out
+    None
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{prog, prog_inline, Machine};
+    use crate::{find_inv_for_program, prog, prog_inline, Machine};
+
+    #[test]
+    fn test_inv_program_sample() {
+        let mut m = Machine {
+            registers: [729, 0, 0],
+            ip: 0,
+            program: vec![0, 3, 5, 4, 3, 0],
+        };
+
+        let a = find_inv_for_program(&m.program, m.clone()).expect("Solution for a");
+
+        m.registers[0] = a;
+
+        let out = m.run_to_halt();
+
+        assert_eq!(&m.program, &out);
+    }
+
+    #[test]
+    fn test_inv_program_input() {
+        let mut m = Machine {
+            registers: [729, 0, 0],
+            ip: 0,
+            program: vec![2, 4, 1, 2, 7, 5, 4, 7, 1, 3, 5, 5, 0, 3, 3, 0],
+        };
+
+        let a = find_inv_for_program(&m.program, m.clone()).expect("Solution for a");
+
+        m.registers[0] = a;
+
+        let out = m.run_to_halt();
+
+        assert_eq!(&m.program, &out);
+    }
 
     #[test]
     fn test_prog_compat() {
