@@ -134,48 +134,37 @@ impl PartialEq for SearchItem {
     }
 }
 
-fn find_path(map: &Map, start_rendeer: Reindeer, end_pos: Pos) -> (i64, Vec<Reindeer>) {
-    let mut fringe_set = HashSet::new();
-    let mut fringe_q = BinaryHeap::new();
+fn build_paths(prev: &HashMap<Reindeer, (i64, HashSet<Reindeer>)>, target: Reindeer) -> Vec<Vec<Reindeer>> {
+    let mut res = Vec::new();
 
-    //let mut seen_set = HashSet::new();
+    if let Some(prev_links) = prev.get(&target) {
+        for prev_link in prev_links.1.iter() {
+            let mut next_prevs = build_paths(prev, *prev_link);
 
-    let mut known_costs: HashMap<Reindeer, i64> = HashMap::new();
-    let mut estimated_costs: HashMap<Reindeer, i64> = HashMap::new();
-    let mut backpath: HashMap<Reindeer, Reindeer> = HashMap::new();
-
-    fringe_set.insert(start_rendeer.clone());
-    fringe_q.push(SearchItem(i64::MAX, start_rendeer));
-
-    known_costs.insert(start_rendeer, 0);
-
-    while let Some(SearchItem(_, cur)) = fringe_q.pop() {
-        let cur_cost = known_costs[&cur];
-
-        if cur.pos == end_pos {
-            let mut backlist = Vec::new();
-            let mut cur_back = cur;
-
-            loop {
-                backlist.push(cur_back);
-
-                if let Some(nextback) = backpath.get(&cur_back) {
-                    cur_back = *nextback;
-                }
-                else {
-                    break;
-                }
+            for next_prev in next_prevs.iter_mut() {
+                next_prev.push(target);
             }
 
-            backlist.reverse();
-
-            assert_eq!(backlist[0], start_rendeer);
-            assert_eq!(backlist.last().unwrap().pos, end_pos);
-
-            return (cur_cost, backlist);
+            res.extend(next_prevs);
         }
+    }
 
-        fringe_set.remove(&cur);
+    res
+}
+
+
+
+fn dijkstra(map: &Map, start_rendeer: Reindeer, end_pos: Pos) -> (i64, Vec<Vec<Reindeer>>) {
+    let mut dist = HashMap::new();
+    let mut prev = HashMap::new();
+    let mut fringe_q = BinaryHeap::new();
+    let mut seen = HashSet::new();
+
+    dist.insert(start_rendeer, 0);
+    fringe_q.push(SearchItem(0, start_rendeer));
+
+    while let Some(SearchItem(_, cur)) = fringe_q.pop() {
+        seen.insert(cur);
 
         let neighbors = [
             Reindeer {
@@ -192,134 +181,151 @@ fn find_path(map: &Map, start_rendeer: Reindeer, end_pos: Pos) -> (i64, Vec<Rein
             }
         ];
 
+
+        let cur_cost = dist.get(&cur).copied().unwrap_or(i64::MAX);
+
+
         for neigh in neighbors {
+            if seen.contains(&neigh) {
+                continue;
+            }
+
             let is_wall = map_get(map, neigh.pos);
 
             if is_wall {
                 continue;
             }
 
+            let existing_neigh_cost = dist.get(&neigh).copied().unwrap_or(i64::MAX);
+
+
             let neigh_cost = cur_cost + cost(cur, neigh);
 
-            let existing_cost = known_costs.get(&neigh).copied().unwrap_or(i64::MAX);
+            if neigh_cost <= existing_neigh_cost {
+                dist.insert(neigh, neigh_cost);
+                let prev_entry = prev.entry(neigh).or_insert_with(|| {
+                    (neigh_cost, HashSet::new())
+                });
 
-            if neigh_cost < existing_cost {
-                // udpate backwards path
-                backpath.insert(neigh, cur);
+                if prev_entry.0 != neigh_cost {
+                    prev_entry.0 = neigh_cost;
+                    prev_entry.1 = HashSet::new();
+                }
 
-                known_costs.insert(neigh, neigh_cost);
+                prev_entry.1.insert(neigh);
 
-                let est_cost = neigh_cost + h(neigh.pos, end_pos);
-                estimated_costs.insert(neigh, est_cost);
-
-                if !fringe_set.contains(&neigh) {
-                    fringe_set.insert(neigh);
-                    fringe_q.push(SearchItem(est_cost, neigh));
+                if neigh_cost != existing_neigh_cost {
+                    fringe_q.push(SearchItem(neigh_cost, neigh));
                 }
             }
         }
     }
 
-    panic!("No path found!");
-}
+    let all_dirs = [
+        Vec2::new(0, 1),
+        Vec2::new(-1, 0),
+        Vec2::new(0, -1),
+        Vec2::new(1, 0),
+    ];
 
+    let mut all_paths = Vec::new();
+    let mut min_cost = i64::MAX;
 
+    for dir in all_dirs {
+        let end_r = Reindeer {
+            pos: end_pos,
+            facing: dir
+        };
 
-fn find_best_paths(map: &Map, start_rendeer: Reindeer, end_pos: Pos) -> (i64, Vec<Vec<Reindeer>>) {
-    let mut fringe_set = HashSet::new();
-    let mut fringe_q = BinaryHeap::new();
-
-    //let mut seen_set = HashSet::new();
-
-    let mut known_costs: HashMap<Reindeer, i64> = HashMap::new();
-    let mut estimated_costs: HashMap<Reindeer, i64> = HashMap::new();
-    let mut backpath: HashMap<Reindeer, Reindeer> = HashMap::new();
-
-    fringe_set.insert(vec![start_rendeer.clone()]);
-    fringe_q.push(SearchItem(i64::MAX, start_rendeer));
-
-    known_costs.insert(start_rendeer, 0);
-
-    let mut best_paths = Vec::new();
-    let mut best_path_cost = None;
-
-    while let Some(SearchItem(_, cur)) = fringe_q.pop() {
-        let cur_cost = known_costs[&cur];
-
-        if cur.pos == end_pos {
-            dbg!(cur_cost);
-            if best_path_cost.is_none() || Some(cur_cost) == best_path_cost {
-                let mut backlist = Vec::new();
-                let mut cur_back = cur;
-
-                loop {
-                    backlist.push(cur_back);
-
-                    if let Some(nextback) = backpath.get(&cur_back) {
-                        cur_back = *nextback;
-                    }
-                    else {
-                        break;
-                    }
-                }
-
-                backlist.reverse();
-
-                assert_eq!(backlist[0], start_rendeer);
-                assert_eq!(backlist.last().unwrap().pos, end_pos);
-
-                best_paths.push(backlist);
-                best_path_cost = Some(cur_cost);
-            }
-        }
-
-        fringe_set.remove(&cur);
-
-        let neighbors = [
-            Reindeer {
-                pos: cur.pos + cur.facing,
-                ..cur
-            },
-            Reindeer {
-                facing: rotate_90(cur.facing),
-                ..cur
-            },
-            Reindeer {
-                facing: rotate_90_ccw(cur.facing),
-                ..cur
-            }
-        ];
-
-        for neigh in neighbors {
-            let is_wall = map_get(map, neigh.pos);
-
-            if is_wall {
-                continue;
-            }
-
-            let neigh_cost = cur_cost + cost(cur, neigh);
-
-            let existing_cost = known_costs.get(&neigh).copied().unwrap_or(i64::MAX);
-
-            if neigh_cost < existing_cost {
-                // udpate backwards path
-                backpath.insert(neigh, cur);
-
-                known_costs.insert(neigh, neigh_cost);
-
-                let est_cost = neigh_cost + h(neigh.pos, end_pos);
-                estimated_costs.insert(neigh, est_cost);
-
-                if !fringe_set.contains(&neigh) {
-                    fringe_set.insert(neigh);
-                    fringe_q.push(SearchItem(est_cost, neigh));
-                }
-            }
+        if let Some(r_cost) = dist.get(&end_r).copied() {
+            min_cost = i64::min(min_cost, r_cost);
+            all_paths.extend(build_paths(&prev, end_r));
         }
     }
 
-    (best_path_cost.unwrap(), best_paths)
+    (min_cost, all_paths)
 }
+
+// fn find_best_paths(map: &Map, start_rendeer: Reindeer, end_pos: Pos) -> (i64, Vec<Vec<Reindeer>>) {
+//     let mut fringe_set = HashSet::new();
+//     let mut fringe_q = BinaryHeap::new();
+
+//     //let mut seen_set = HashSet::new();
+
+//     let mut known_costs: HashMap<Reindeer, i64> = HashMap::new();
+//     let mut estimated_costs: HashMap<Reindeer, i64> = HashMap::new();
+
+//     fringe_set.insert(vec![start_rendeer.clone()]);
+//     fringe_q.push(SearchItem(i64::MAX, vec![start_rendeer]));
+
+//     known_costs.insert(start_rendeer, 0);
+
+//     let mut best_paths = Vec::new();
+//     let mut best_path_cost = None;
+
+//     while let Some(SearchItem(_, cur_path)) = fringe_q.pop() {
+//         let cur = cur_path.last().unwrap().clone();
+//         let cur_cost = known_costs[&cur];
+
+//         if cur.pos == end_pos {
+//             dbg!(cur_cost);
+//             if best_path_cost.is_none() || Some(cur_cost) == best_path_cost {
+//                 best_paths.push(cur_path.clone());
+//                 best_path_cost = Some(cur_cost);
+//             }
+//             else {
+//                 break;
+//             }
+//             continue;
+//         }
+
+//         fringe_set.remove(&cur_path);
+
+//         let neighbors = [
+//             Reindeer {
+//                 pos: cur.pos + cur.facing,
+//                 ..cur
+//             },
+//             Reindeer {
+//                 facing: rotate_90(cur.facing),
+//                 ..cur
+//             },
+//             Reindeer {
+//                 facing: rotate_90_ccw(cur.facing),
+//                 ..cur
+//             }
+//         ];
+
+//         for neigh in neighbors {
+//             let is_wall = map_get(map, neigh.pos);
+
+//             if is_wall {
+//                 continue;
+//             }
+
+//             let neigh_cost = cur_cost + cost(cur, neigh);
+
+//             let existing_cost = known_costs.get(&neigh).copied().unwrap_or(i64::MAX);
+
+//             if neigh_cost <= existing_cost {
+//                 let mut neigh_path = cur_path.clone();
+//                 neigh_path.push(neigh);
+
+//                 known_costs.insert(neigh, neigh_cost);
+
+//                 let est_cost = neigh_cost + h(neigh.pos, end_pos);
+//                 estimated_costs.insert(neigh, est_cost);
+
+//                 if !fringe_set.contains(&neigh_path) {
+//                     fringe_set.insert(neigh_path.clone());
+//                     fringe_q.push(SearchItem(est_cost, neigh_path));
+//                 }
+//             }
+//         }
+//     }
+
+//     (best_path_cost.unwrap(), best_paths)
+// }
 
 
 fn parse_input(mut reader: impl BufRead) -> Result<Input> {
@@ -395,7 +401,7 @@ fn main() -> Result<()> {
 
     dbg!(&map);
 
-    let (final_cost, paths) = find_best_paths(&map, start, end_pos);
+    let (final_cost, paths) = dijkstra(&map, start, end_pos);
 
     let path = paths[0].clone();
     draw_map_with_sol(&map, &path);
