@@ -10,6 +10,13 @@ run-input:
     cat input.txt | cargo run
 
 [no-cd]
+time-input:
+    #!/usr/bin/fish
+    cargo build --release
+    time cat input.txt | cargo run --release
+
+
+[no-cd]
 fetch-problem:
     aoc d --input-file=input.txt
 
