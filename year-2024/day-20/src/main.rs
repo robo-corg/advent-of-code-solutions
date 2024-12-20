@@ -186,6 +186,11 @@ impl DijkstraState {
             let cheat_neighs = (-cheat_len..cheat_len+1).flat_map(|y_off| {
                 (-cheat_len..cheat_len+1).filter_map(move |x_off| {
                     let off = Vec2::new(x_off, y_off);
+                    let pos = cur.0 + off;
+
+                    if !map.is_pos_empty(pos) {
+                        return None;
+                    }
 
                     let d= off.abs().sum();
 
@@ -196,7 +201,7 @@ impl DijkstraState {
                     }
 
                     let neigh = (
-                        cur.0 + off,
+                        pos,
                         true
                     );
 
@@ -305,10 +310,10 @@ fn solve(map: &Map, start_pos: Pos, end_pos: Pos, cheat_len: i32) -> usize {
         used_cheat_positions.insert(new_cheat_pos);
 
         let savings = base_cost.saturating_sub(cheat_cost);
+        // dbg!(savings, new_cheat_pos);
         dbg!(savings);
 
-
-        if savings >= 50 {
+        if savings >= 100 {
             cheat_count += 1;
         }
         else {
