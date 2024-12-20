@@ -126,121 +126,189 @@ impl PartialEq for SearchItem {
     }
 }
 
+type State = (Pos, bool);
 
-fn dijkstra(map: &Map, start_pos: Pos, end_pos: Pos, used_cheat_positions: &HashSet<Pos>, allow_cheats: bool) -> Option<(usize, Option<Pos>)> {
-    let mut dist= HashMap::new();
-    let mut prev = HashMap::new();
-    let mut fringe_q = BinaryHeap::new();
-    let mut seen = HashSet::new();
+#[derive(Debug, Clone)]
+struct DijkstraState {
+    dist: HashMap<State, i32>,
+    prev: HashMap<State, State>,
+    seen: HashSet<State>
+}
 
-    dist.insert((start_pos, false), 0);
-    fringe_q.push(SearchItem(0, (start_pos, false)));
-
-    while let Some(SearchItem(_, cur)) = fringe_q.pop() {
-        seen.insert(cur);
-
-        assert!(allow_cheats || map.is_pos_empty(cur.0));
-
-
-        // if cur == (end_pos, allow_cheats) {
-        //     dbg!("found end");
-        //     break;
-        // }
-
-        let neighbors = [
-            Vec2::new(1, 0),
-            Vec2::new(0, 1),
-            Vec2::new(0, -1),
-            Vec2::new(-1, 0),
-        ].map(|d| (cur.0 + d, cur.1));
-
-       // dbg!(&neighbors);
-
-        let cheat_neighs= neighbors.iter().filter_map(|neigh| {
-            if allow_cheats && !neigh.1 && !used_cheat_positions.contains(&neigh.0) {
-                Some((neigh.0.clone(), true))
-            }
-            else {
-                None
-            }
-        });
-
-        let cur_cost = dist.get(&cur).copied().unwrap_or(i32::MAX);
-
-        for neigh in neighbors.iter().cloned().chain(cheat_neighs) {
-            if seen.contains(&neigh) {
-                continue;
-            }
-
-            let is_wall = !map.is_pos_empty(neigh.0);
-            let cheated = !cur.1 && neigh.1;
-
-            if !cheated && is_wall {
-                continue;
-            }
-
-            //dbg!(&neigh);
-
-            let existing_neigh_cost = dist.get(&neigh).copied().unwrap_or(i32::MAX);
-
-
-            let neigh_cost = cur_cost + cost(cur.0, neigh.0);
-
-            if neigh_cost < existing_neigh_cost {
-                dist.insert(neigh, neigh_cost);
-                let prev_entry = prev.insert(neigh, cur);
-
-                fringe_q.push(SearchItem(neigh_cost, neigh));
-            }
+impl DijkstraState {
+    fn new() -> Self {
+        DijkstraState {
+            dist: HashMap::new(),
+            prev: HashMap::new(),
+            seen: HashSet::new(),
         }
     }
 
-    let mut path = vec![(end_pos, allow_cheats)];
-    let mut cheat_pos = None;
+    fn dijkstra(&mut self, map: &Map, start_pos: Pos, end_pos: Pos, used_cheat_positions: &HashSet<(Pos, Pos)>, cheat_len:i32) -> Option<(usize, Option<(Pos, Pos)>)> {
+        let mut fringe_q = BinaryHeap::new();
 
-    while let Some(next) = prev.get(path.last().unwrap()) {
-        let last = path.last().unwrap();
+        let allow_cheats = cheat_len > 0;
 
-        // cheat used
-        if last.1 && !next.1 {
-            cheat_pos = Some(last.0.clone());
-            assert!(map.is_pos_empty(next.0));
+        self.dist.insert((start_pos, false), 0);
+        fringe_q.push(SearchItem(0, (start_pos, false)));
+
+        //dbg!(used_cheat_positions);
+
+        while let Some(SearchItem(_, cur)) = fringe_q.pop() {
+            self.seen.insert(cur);
+
+            assert!(allow_cheats || map.is_pos_empty(cur.0));
+
+
+            // if cur == (end_pos, allow_cheats) {
+            //     dbg!("found end");
+            //     break;
+            // }
+
+            let neighbors = [
+                Vec2::new(1, 0),
+                Vec2::new(0, 1),
+                Vec2::new(0, -1),
+                Vec2::new(-1, 0),
+            ].map(|d| ((cur.0 + d, cur.1), 1));
+
+        // dbg!(&neighbors);
+
+            // let cheat_neighs= neighbors.iter().filter_map(|neigh| {
+            //     if allow_cheats && !neigh.1 && !used_cheat_positions.contains(&neigh.0) {
+            //         Some((neigh.0.clone(), true))
+            //     }
+            //     else {
+            //         None
+            //     }
+            // });
+
+            let cheat_neighs = (-cheat_len..cheat_len+1).flat_map(|y_off| {
+                (-cheat_len..cheat_len+1).filter_map(move |x_off| {
+                    let off = Vec2::new(x_off, y_off);
+
+                    let d= off.abs().sum();
+
+                    //dbg!(&off, d, cheat_len);
+
+                    if d > cheat_len || off == Vec2::new(0, 0) {
+                        return None;
+                    }
+
+                    let neigh = (
+                        cur.0 + off,
+                        true
+                    );
+
+                    if !cur.1 && !used_cheat_positions.contains(&(cur.0, neigh.0)) {
+                        Some((neigh, d))
+                    }
+                    else {
+                        None
+                    }
+                })
+            });
+
+            let cur_cost = self.dist.get(&cur).copied().unwrap_or(i32::MAX);
+
+            for (neigh, neigh_cost_delta) in neighbors.iter().cloned().chain(cheat_neighs) {
+                if self.seen.contains(&neigh) {
+                    continue;
+                }
+
+                assert!(neigh_cost_delta > 0);
+
+                let is_wall = !map.is_pos_empty(neigh.0);
+                let cheated = !cur.1 && neigh.1;
+
+                // if cheated {
+                //     dbg!(cur, neigh, neigh_cost_delta);
+                // }
+
+                if !cheated && is_wall {
+                    //assert!(!used_cheat_positions.contains(&neigh.0));
+                    continue;
+                }
+
+                //dbg!(&neigh);
+
+                let existing_neigh_cost = self.dist.get(&neigh).copied().unwrap_or(i32::MAX);
+
+
+                let neigh_cost = cur_cost + neigh_cost_delta;
+
+                if neigh_cost < existing_neigh_cost {
+                    self.dist.insert(neigh, neigh_cost);
+                    self.prev.insert(neigh, cur);
+
+                    fringe_q.push(SearchItem(neigh_cost, neigh));
+                }
+            }
         }
 
-        path.push(next.clone());
-    }
+        if !self.seen.contains(&(end_pos, allow_cheats)) {
+            return None;
+        }
 
-    path.reverse();
+        let mut path = vec![(end_pos, allow_cheats)];
+        let mut cheat_pos = None;
+        let cost = self.dist[&(end_pos, allow_cheats)];
 
-    if path[0].0 == start_pos {
-        Some((path.len() - 1, cheat_pos))
-    }
-    else {
-        None
+        while let Some(next) = self.prev.get(path.last().unwrap()) {
+            let last = path.last().unwrap();
+
+            // cheat used
+            if last.1 && !next.1 {
+                cheat_pos = Some((next.0.clone(), last.0.clone()));
+                //assert!(!used_cheat_positions.contains(&last.0));
+                assert!(map.is_pos_empty(next.0));
+                //assert!(!map.is_pos_empty(last.0));
+            }
+
+            path.push(next.clone());
+        }
+
+        path.reverse();
+
+        if path[0].0 == start_pos {
+            Some((cost as usize, cheat_pos))
+        }
+        else {
+            None
+        }
     }
 }
 
 
-fn part1(map: &Map, start_pos: Pos, end_pos: Pos) -> usize {
+fn solve(map: &Map, start_pos: Pos, end_pos: Pos, cheat_len: i32) -> usize {
     let mut used_cheat_positions = HashSet::new();
 
-    let (base_cost, _) = dijkstra(map, start_pos, end_pos, &used_cheat_positions, false).unwrap();
+    let mut base_dijkstra= DijkstraState::new();
+
+    let (base_cost, _) = base_dijkstra.dijkstra(map, start_pos, end_pos, &used_cheat_positions, 0).unwrap();
+    base_dijkstra.seen = HashSet::new();
+    base_dijkstra.prev = HashMap::new();
+
+    //dbg!(&base_dijkstra.dist);
 
     dbg!(base_cost);
 
     let mut cheat_count = 0;
 
-    while let Some((cheat_cost, new_cheat_pos)) = dijkstra(map, start_pos, end_pos, &used_cheat_positions, true) {
-        dbg!(cheat_cost);
+    while let Some((cheat_cost, new_cheat_pos)) = DijkstraState::new().dijkstra(map, start_pos, end_pos, &used_cheat_positions, cheat_len) {
+    //while let Some((cheat_cost, new_cheat_pos)) = base_dijkstra.clone().dijkstra(map, start_pos, end_pos, &used_cheat_positions, 1) {
 
         let new_cheat_pos = new_cheat_pos.unwrap();
+        //dbg!(cheat_cost, new_cheat_pos);
 
         assert!(!used_cheat_positions.contains(&new_cheat_pos));
         used_cheat_positions.insert(new_cheat_pos);
 
         let savings = base_cost.saturating_sub(cheat_cost);
+        dbg!(savings);
 
-        if savings >= 100 {
+
+        if savings >= 50 {
             cheat_count += 1;
         }
         else {
@@ -249,6 +317,14 @@ fn part1(map: &Map, start_pos: Pos, end_pos: Pos) -> usize {
     }
 
     cheat_count
+}
+
+fn part1(map: &Map, start_pos: Pos, end_pos: Pos) -> usize {
+    solve(map, start_pos, end_pos, 1)
+}
+
+fn part2(map: &Map, start_pos: Pos, end_pos: Pos) -> usize {
+    solve(map, start_pos, end_pos, 20)
 }
 
 fn main() -> Result<()> {
@@ -260,7 +336,9 @@ fn main() -> Result<()> {
 
     dbg!(&map);
 
-    println!("Part1: {}", part1(&map, start_pos, end_pos));
+    //println!("Part1: {}", part1(&map, start_pos, end_pos));
+
+    println!("Part2: {}", part2(&map, start_pos, end_pos));
 
     Ok(())
 }
